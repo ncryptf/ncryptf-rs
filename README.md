@@ -1,5 +1,5 @@
 <div align="center">
-  <!-- <img src="https://github.com/ncryptf/ncryptf-rs/blob/master/logo.png?raw=true" width="280"/> -->
+  <img src="https://raw.githubusercontent.com/ncryptf/ncryptf-rs/master/logo.png" width="280"/>
 
   <h1>ncryptf-rs</h1>
 
@@ -7,5 +7,3 @@
     <strong><em>Rust</em> bindings for ncryptf</strong>
   </p>
 </div>
-
-## Introduction
