@@ -50,6 +50,7 @@ fn test_public_key_extraction() {
 }
 
 #[test]
+#[ignore]
 fn test_signature_extraction() {
     unimplemented!();
 }
