@@ -1,5 +1,9 @@
 extern crate base64;
 use dryoc::generichash::GenericHash;
+use chrono::{
+    DateTime,
+    offset::Utc
+};
 
 #[derive(Debug, Clone)]
 pub struct Signature;
@@ -10,7 +14,7 @@ impl Signature {
         method: String,
         uri: String,
         salt: Vec<u8>,
-        datetime: chrono::DateTime<chrono::offset::Utc>,
+        datetime:DateTime<Utc>,
         payload: String,
         version: Option<i8>
     ) -> String {

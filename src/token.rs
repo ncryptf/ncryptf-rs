@@ -8,7 +8,7 @@ pub struct Token {
     pub access_token: String,
     pub refresh_token: String,
     pub ikm: Vec<u8>,
-    signature: Vec<u8>,
+    pub signature: Vec<u8>,
     pub expires_at: u64
 }
 

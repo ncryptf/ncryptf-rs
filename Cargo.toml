@@ -16,7 +16,14 @@ thiserror = { version = "^1.0" }
 chrono = { version = "^0.4" }
 base64 = { version = "^0.13" }
 dryoc = { version = "0.3.14" }
-sha256 = "1.0.3"
+sha256 = { version = "1.0.3" }
+hkdf = { version = "^0.12" }
+sha2 = { version = "^0.10", default-features = false }
+hmac = { version = "^0.12" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["raw_value"] }
+constant_time_eq = "0.2.4"
+hex = "0.4.3"
 
 [lib]
 name = "ncryptf"

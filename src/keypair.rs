@@ -1,11 +1,17 @@
 
-use dryoc::{dryocbox::KeyPair, constants::{CRYPTO_BOX_PUBLICKEYBYTES, CRYPTO_BOX_SECRETKEYBYTES}};
+use dryoc::{
+    dryocbox::KeyPair,
+    constants::{
+        CRYPTO_BOX_PUBLICKEYBYTES,
+        CRYPTO_BOX_SECRETKEYBYTES
+    }
+};
 
 use crate::error::NcryptfError as Error;
 
 #[derive(Debug, Clone)]
 pub struct Keypair {
-    secret_key: Vec<u8>,
+    pub secret_key: Vec<u8>,
     pub public_key: Vec<u8>
 }
 
