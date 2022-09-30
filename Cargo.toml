@@ -1,0 +1,25 @@
+[package]
+name = "ncryptf-rs"
+authors = ["Charles R. Portwood II <charlesportwoodii@erianna.com>"]
+description = "Secure API authentication and end to end encryption."
+repository = "https://github.com/ncryptf/ncryptf-rs"
+categories = ["cryptography", "authentication", "networking", "api-bindings"]
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+libsodium-sys-stable = { version = "1.19.22" }
+thiserror = { version = "^1.0" }
+chrono = { version = "^0.4" }
+base64 = { version = "^0.13" }
+dryoc = { version = "0.3.14" }
+sha256 = "1.0.3"
+
+[lib]
+name = "ncryptf"
+
+[features]
+default = []
+rocket = []
