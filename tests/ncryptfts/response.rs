@@ -1,4 +1,5 @@
 use ncryptf::response::Response;
+use ncryptf::request::Request;
 use super::cases::{get_expected_cipher,get_expected_v2_cipher, CData};
 
 #[test]
@@ -45,6 +46,24 @@ fn test_public_key_extraction() {
         },
         Err(_) => {
             assert!(false)
+        }
+    };
+}
+
+#[test]
+fn test_sign_and_verify() {
+    let c = CData::init();
+     match Request::from(c.client_kp_secret, c.signature_kp_secret) {
+        Ok(mut request) => {
+            let signature = request.sign("".to_string());
+
+            assert!(Response::is_signature_valid(
+                "".to_string(),
+                signature.unwrap(),
+                c.signature_kp_public).unwrap());
+        },
+        _ => {
+            assert!(false);
         }
     };
 }

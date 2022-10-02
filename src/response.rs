@@ -83,7 +83,9 @@ impl Response {
                 let res = string.trim_matches(char::from(0)).to_string();
                 return Ok(res);
             },
-            Err(_error) => return Err(Error::DecryptError)
+            Err(_error) => {
+                return Err(Error::DecryptError)
+            }
         };
     }
 
