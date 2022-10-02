@@ -17,8 +17,6 @@ fn test_v2_encrypt_decrypt() {
                 Some(2)
             ) {
                 Ok(cipher) => {
-                    dbg!(cipher.clone());
-                    dbg!(get_expected_v2_cipher());
                     assert_eq!(cipher, get_expected_v2_cipher());
                     match Response::from(c.server_kp_secret) {
                         Ok(response) => {

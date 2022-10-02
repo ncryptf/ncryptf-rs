@@ -5,16 +5,14 @@ use dryoc::{
         CRYPTO_SIGN_PUBLICKEYBYTES,
         CRYPTO_BOX_NONCEBYTES,
         CRYPTO_BOX_PUBLICKEYBYTES,
-        CRYPTO_BOX_MACBYTES,
-        CRYPTO_GENERICHASH_BYTES
+        CRYPTO_BOX_MACBYTES
     },
     classic::{
         crypto_sign::crypto_sign_verify_detached,
-        crypto_box::crypto_box_open_easy,
-        crypto_generichash::*
     }, generichash::GenericHash
 };
 use constant_time_eq::constant_time_eq;
+use libsodium_sys::crypto_box_open_easy;
 
 use crate::{error::NcryptfError as Error, VERSION_2_HEADER};
 
@@ -25,10 +23,6 @@ pub struct Response {
 impl Response {
     /// Decrypts a response
     pub fn decrypt(&self, response: Vec<u8>, public_key: Option<Vec<u8>>, nonce: Option<Vec<u8>>) -> Result<String, Error> {
-        if response.len() < 236 {
-            return Err(Error::DecryptError);
-        }
-
         // Extract the nonce if one isn't provided
         let n = match nonce {
             Some(nonce) => nonce,
@@ -63,30 +57,33 @@ impl Response {
             return Err(Error::InvalidArgument(format!("Response is too short to be decrypted")));
         }
 
-        let msg: Vec<u8> = vec![0; response.clone().len()-CRYPTO_BOX_MACBYTES];
-        let mut message: Box<Vec<u8>> = Box::new(msg);
+        let mut message = Box::new(vec![0; response.clone().len()-CRYPTO_BOX_MACBYTES]);
         let sk: [u8; CRYPTO_BOX_SECRETKEYBYTES] = self.secret_key.clone().try_into().unwrap();
         let pk: [u8; CRYPTO_BOX_PUBLICKEYBYTES] = public_key.try_into().unwrap();
         let n: [u8; CRYPTO_BOX_NONCEBYTES] = nonce.try_into().unwrap();
-        match crypto_box_open_easy(
-            &mut message, // This is heap allocated in Box::
-            &response,
-            &n,
-            &pk,
-            &sk) {
-            Ok(_) => {
+
+        let result: i32 = unsafe {
+            crypto_box_open_easy(
+                message.as_mut_ptr(),
+                response.clone().as_ptr(),
+                response.len().try_into().unwrap(),
+                n.as_ptr(),
+                pk.as_ptr(),
+                sk.as_ptr()
+            )
+        };
+
+        match result {
+            0 => {
                 let v = message.to_vec().to_owned();
                 let string = String::from_utf8(v).unwrap();
-                // There's 8 extra bytes in the message that need to be trimmed \0\0\0\0\0\0\0\0
-                // It should probably be fixed but the test cases I have allow it to pass
-                // So until it becomes an issue we're going to ignore them and just strip them out.
                 let res = string.trim_matches(char::from(0)).to_string();
                 return Ok(res);
             },
-            Err(_error) => {
-                return Err(Error::DecryptError)
+            _ => {
+                return Err(Error::DecryptError);
             }
-        };
+        }
     }
 
     fn decrypt_v2(&self, response: Vec<u8>, nonce: Vec<u8>) -> Result<String, Error> {

@@ -6,17 +6,15 @@ use dryoc::{
         CRYPTO_BOX_PUBLICKEYBYTES,
         CRYPTO_BOX_NONCEBYTES,
         CRYPTO_SIGN_PUBLICKEYBYTES,
-        CRYPTO_GENERICHASH_BYTES,
     },
     rng::randombytes_buf,
     classic::{
         crypto_sign::crypto_sign_detached,
-        crypto_box::*,
         crypto_core::crypto_scalarmult_base,
-        crypto_generichash::*
     }, generichash::GenericHash
 };
 use libsodium_sys::crypto_sign_ed25519_sk_to_pk;
+use libsodium_sys::crypto_box_easy;
 
 use crate::{error::NcryptfError as Error, VERSION_2_HEADER};
 
@@ -103,19 +101,32 @@ impl Request {
     /// Internal encryption method
     fn encrypt_body(&self, data: String, public_key: Vec<u8>, nonce: Vec<u8>) -> Result<Vec<u8>, Error> {
         let message = data.as_bytes();
-        let mut ciphertext = vec![0u8; message.len() + CRYPTO_BOX_NONCEBYTES];
+        let mut ciphertext = Box::new(vec![0u8; message.len() + CRYPTO_BOX_NONCEBYTES]);
         let sk:[u8; CRYPTO_BOX_SECRETKEYBYTES] = self.secret_key.clone().try_into().unwrap();
         let pk: [u8; CRYPTO_BOX_PUBLICKEYBYTES] = public_key.clone().try_into().unwrap();
         let n: [u8; CRYPTO_BOX_NONCEBYTES] = nonce.clone().try_into().unwrap();
 
-        match crypto_box_easy(&mut ciphertext, message, &n, &pk, &sk) {
-            Ok(_) => {
-                return Ok(ciphertext.to_vec());
-            },
-            Err(_error) => {
-                return Err(Error::EncryptError);
-            }
+        let result: i32= unsafe {
+            crypto_box_easy(
+                ciphertext.as_mut_ptr(),
+                message.as_ptr(),
+                message.len().try_into().unwrap(),
+                n.as_ptr(),
+                pk.as_ptr(),
+                sk.as_ptr()
+            )
         };
+
+        match result {
+            0 => {
+                let mut vec = ciphertext.to_vec();
+                vec.retain(|x| *x != 0);
+                return Ok(vec);
+            },
+            _ => {
+                return Err(Error::DecryptError);
+            }
+        }
     }
 
     /// Returns the nonce

@@ -116,7 +116,11 @@ pub fn get_expected_v2_cipher() -> Vec<u8> {
 }
 
 pub fn get_payload() -> String {
-    return r#"{
+    /*
+    This a a base64 encoding representation of the following JSON body.
+    Base64 encoding is done to alleviate conversion issues with whitespace in rust.
+    In practice this is irrelevant but for the tests the whitespace matters for legacy compatability purposes
+    {
         "foo": "bar",
         "test": {
             "true": false,
@@ -128,7 +132,10 @@ pub fn get_payload() -> String {
                 "a", "b", "c", "d"
             ]
         }
-    }"#.to_string();
+    }
+    */
+    let raw =  base64::decode("ewogICAgImZvbyI6ICJiYXIiLAogICAgInRlc3QiOiB7CiAgICAgICAgInRydWUiOiBmYWxzZSwKICAgICAgICAiemVybyI6IDAuMCwKICAgICAgICAiYSI6IDEsCiAgICAgICAgImIiOiAzLjE0LAogICAgICAgICJuaWwiOiBudWxsLAogICAgICAgICJhcnIiOiBbCiAgICAgICAgICAgICJhIiwgImIiLCAiYyIsICJkIgogICAgICAgIF0KICAgIH0KfQ==").unwrap();
+    return std::str::from_utf8(&raw).unwrap().to_string();
 }
 
 pub struct CData {
