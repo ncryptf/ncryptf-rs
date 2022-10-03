@@ -4,7 +4,7 @@ authors = ["Charles R. Portwood II <charlesportwoodii@erianna.com>"]
 description = "Secure API authentication and end to end encryption."
 repository = "https://github.com/ncryptf/ncryptf-rs"
 license = "BSD-3-Clause"
-categories = ["cryptography", "authentication", "networking", "api-bindings"]
+categories = ["cryptography", "authentication", "api-bindings"]
 version = "0.2.0"
 edition = "2021"
 
