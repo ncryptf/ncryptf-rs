@@ -32,6 +32,28 @@ impl Token {
         });
     }
 
+    /// Given a serde_json::Value, will attempt to return a token
+    pub fn from_json(json: serde_json::Value) -> Result<Self, Error> {
+        if json.get("access_token").is_none()  ||
+        json.get("refresh_token").is_none() ||
+        json.get("ikm").is_none() ||
+        json.get("signing").is_none() ||
+        json.get("expires_at").is_none() {
+            return Err(Error::InvalidArgument(format!("The provided JSON object is not valid for tokenization.")));
+        }
+
+        return match Token::from(
+            json.get("access_token").unwrap().to_string(),
+            json.get("refresh_token").unwrap().to_string(),
+            base64::decode(json.get("ikm").unwrap().as_str().unwrap()).unwrap(),
+            base64::decode(json.get("signing").unwrap().as_str().unwrap()).unwrap(),
+            json.get("expires_at").unwrap().as_u64().unwrap()
+        ) {
+            Ok(token) => return Ok(token),
+            Err(_error) => Err(_error)
+        }
+    }
+
     /// Returns true of the token is expired
     /// If the token is expired, it should be discarded
     pub fn is_expired(&self) -> bool {

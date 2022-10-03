@@ -1,9 +1,11 @@
 extern crate base64;
-use dryoc::generichash::GenericHash;
+use dryoc::{generichash::GenericHash, sign::SigningKeyPair};
 use chrono::{
     DateTime,
     offset::Utc
 };
+
+use crate::Keypair;
 
 #[derive(Debug, Clone)]
 pub struct Signature;
@@ -23,6 +25,15 @@ impl Signature {
         let ts = datetime.to_rfc2822();
 
         return format!("{}\n{}+{}\n{}\n{}", hash, method, uri, ts, b64s);
+    }
+
+    /// Generates a new random signature
+    pub fn new() -> Keypair {
+        let kp = SigningKeyPair::gen_with_defaults();
+        return Keypair {
+            secret_key: kp.secret_key.to_vec(),
+            public_key: kp.public_key.to_vec()
+        }
     }
 
     /// Generates a signature hash given a salt and data

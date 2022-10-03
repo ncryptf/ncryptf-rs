@@ -18,6 +18,7 @@ use libsodium_sys::crypto_box_easy;
 
 use crate::{error::NcryptfError as Error, VERSION_2_HEADER};
 
+#[derive(Debug, Clone)]
 pub struct Request {
     pub secret_key: Vec<u8>,
     pub signature_secret_key: Vec<u8>,
@@ -34,7 +35,7 @@ impl Request {
     pub fn encrypt_with_nonce(&mut self, data: String, public_key: Vec<u8>, nonce: Option<Vec<u8>>, version: Option<i32>) -> Result<Vec<u8>, Error> {
         let n = match nonce {
             Some(n) => n,
-            None => randombytes_buf(32)
+            None => randombytes_buf(CRYPTO_BOX_NONCEBYTES)
         };
 
         self.nonce = Some(n.clone());
