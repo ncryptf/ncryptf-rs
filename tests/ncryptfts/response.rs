@@ -1,5 +1,5 @@
-use ncryptf::response::Response;
-use ncryptf::request::Request;
+use ncryptf::Response;
+use ncryptf::Request;
 use super::cases::{get_expected_cipher,get_expected_v2_cipher, CData};
 
 #[test]

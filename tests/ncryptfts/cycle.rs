@@ -1,5 +1,5 @@
-use ncryptf::request::Request;
-use ncryptf::response::Response;
+use ncryptf::Request;
+use ncryptf::Response;
 
 use crate::ncryptfts::cases::get_expected_cipher;
 

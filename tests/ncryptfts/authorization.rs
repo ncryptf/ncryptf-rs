@@ -1,4 +1,4 @@
-use ncryptf::authorization::*;
+use ncryptf::*;
 use super::cases::{get_test_cases, get_date, get_salt, get_token, get_v2_hmac_headers, get_v1_hmac_headers};
 
 #[test]

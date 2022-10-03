@@ -1,4 +1,4 @@
-use ncryptf::signature::*;
+use ncryptf::*;
 use super::cases::{get_test_cases, get_v2_signatures, get_date, get_salt, get_v1_signatures};
 
 #[test]

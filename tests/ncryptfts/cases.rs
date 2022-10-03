@@ -2,7 +2,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use base64;
 use chrono::Utc;
 use chrono::TimeZone;
-use ncryptf::token::Token;
+use ncryptf::Token;
 #[derive(Debug, Clone)]
 pub struct TestCase {
     pub method: String,

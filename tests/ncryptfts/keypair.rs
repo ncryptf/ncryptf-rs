@@ -1,5 +1,5 @@
 use dryoc::constants::{CRYPTO_BOX_SECRETKEYBYTES, CRYPTO_BOX_PUBLICKEYBYTES};
-use ncryptf::keypair::*;
+use ncryptf::*;
 
 #[test]
 fn test_get_keypair_sk() {
