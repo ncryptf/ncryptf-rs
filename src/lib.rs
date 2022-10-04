@@ -12,5 +12,12 @@ mod authorization;
 pub use authorization::Authorization;
 mod signature;
 pub use signature::Signature;
+pub mod util;
+pub use util::randombytes_buf;
+#[cfg(feature = "reqwest")]
+mod reqwest;
+
+#[cfg(feature = "rocket")]
+mod rocket;
 
 const VERSION_2_HEADER: &str = "DE259002";

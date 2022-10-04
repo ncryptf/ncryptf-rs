@@ -1,5 +1,4 @@
 use base64;
-use chrono::TimeZone;
 use ncryptf::*;
 use reqwest::header::HeaderMap;
 use reqwest::header::HeaderValue;

@@ -1,18 +1,15 @@
-use dryoc::{
-    constants::{
-        CRYPTO_BOX_SECRETKEYBYTES,
-        CRYPTO_SIGN_BYTES,
-        CRYPTO_SIGN_PUBLICKEYBYTES,
-        CRYPTO_BOX_NONCEBYTES,
-        CRYPTO_BOX_PUBLICKEYBYTES,
-        CRYPTO_BOX_MACBYTES
-    },
-    classic::{
-        crypto_sign::crypto_sign_verify_detached,
-    }, generichash::GenericHash
-};
 use constant_time_eq::constant_time_eq;
-use libsodium_sys::crypto_box_open_easy;
+use libsodium_sys::{
+    crypto_box_open_easy,
+    crypto_sign_verify_detached,
+    crypto_generichash,
+    crypto_sign_BYTES as CRYPTO_SIGN_BYTES,
+    crypto_sign_PUBLICKEYBYTES as CRYPTO_SIGN_PUBLICKEYBYTES,
+    crypto_box_SECRETKEYBYTES as CRYPTO_BOX_SECRETKEYBYTES,
+    crypto_box_PUBLICKEYBYTES as CRYPTO_BOX_PUBLICKEYBYTES,
+    crypto_box_NONCEBYTES as CRYPTO_BOX_NONCEBYTES,
+    crypto_box_MACBYTES as CRYPTO_BOX_MACBYTES
+};
 
 use crate::{error::NcryptfError as Error, VERSION_2_HEADER};
 
@@ -34,7 +31,7 @@ impl Response {
     }
 
     fn decrypt_body(&self, response: Vec<u8>, public_key: Option<Vec<u8>>, nonce: Vec<u8>) -> Result<String, Error> {
-        if nonce.len() != CRYPTO_BOX_NONCEBYTES {
+        if nonce.len() != (CRYPTO_BOX_NONCEBYTES as usize) {
             return Err(Error::InvalidArgument(format!("Nonce should be {} bytes", CRYPTO_BOX_NONCEBYTES)));
         }
 
@@ -50,18 +47,18 @@ impl Response {
     }
 
     fn decrypt_v1(&self, response: Vec<u8>, public_key: Vec<u8>, nonce: Vec<u8>) -> Result<String, Error> {
-        if public_key.len() != CRYPTO_BOX_PUBLICKEYBYTES {
+        if public_key.len() != (CRYPTO_BOX_PUBLICKEYBYTES as usize) {
             return Err(Error::InvalidArgument(format!("Public key should be {} bytes", CRYPTO_BOX_NONCEBYTES)));
         }
 
-        if response.len() < CRYPTO_BOX_MACBYTES {
+        if response.len() < (CRYPTO_BOX_MACBYTES as usize) {
             return Err(Error::InvalidArgument(format!("Response is too short to be decrypted")));
         }
 
-        let mut message = Box::new(vec![0; response.clone().len()-CRYPTO_BOX_MACBYTES]);
-        let sk: [u8; CRYPTO_BOX_SECRETKEYBYTES] = self.secret_key.clone().try_into().unwrap();
-        let pk: [u8; CRYPTO_BOX_PUBLICKEYBYTES] = public_key.try_into().unwrap();
-        let n: [u8; CRYPTO_BOX_NONCEBYTES] = nonce.try_into().unwrap();
+        let mut message = Box::new(vec![0; response.clone().len()-(CRYPTO_BOX_MACBYTES as usize)]);
+        let sk: [u8; (CRYPTO_BOX_SECRETKEYBYTES as usize)] = self.secret_key.clone().try_into().unwrap();
+        let pk: [u8; (CRYPTO_BOX_PUBLICKEYBYTES as usize)] = public_key.try_into().unwrap();
+        let n: [u8; (CRYPTO_BOX_NONCEBYTES as usize)] = nonce.try_into().unwrap();
 
         let result: i32 = unsafe {
             crypto_box_open_easy(
@@ -96,9 +93,22 @@ impl Response {
         let payload = response.get(0..length-64).unwrap().to_vec();
         let checksum = response.get(length-64..length).unwrap().to_vec();
 
-        let s: &[u8; CRYPTO_BOX_NONCEBYTES] = &nonce.clone().try_into().unwrap();
+        let s: &[u8; (CRYPTO_BOX_NONCEBYTES as usize)] = &nonce.clone().try_into().unwrap();
         let input = payload.clone();
-        let hash: Vec<u8> = GenericHash::<CRYPTO_BOX_NONCEBYTES, 64>::hash(&input, Some(s)).unwrap();
+        let mut hash: [u8; 64] = vec![0; 64].try_into().unwrap();
+
+        let _result = unsafe { crypto_generichash(
+            hash.as_mut_ptr(),
+            64,
+            input.as_ptr(),
+            input.len() as u64,
+            s.as_ptr(),
+            CRYPTO_BOX_NONCEBYTES as usize
+        ) };
+
+        if _result != 0 {
+            return Err(Error::DecryptError);
+        }
 
          // Verify that the checksum hasn't been tampered with
          if !constant_time_eq(&checksum, &hash) {
@@ -120,20 +130,27 @@ impl Response {
 
     /// Returns true if the signature is valid for the response
     pub fn is_signature_valid(response: String, signature: Vec<u8>, public_key: Vec<u8>) -> Result<bool, Error> {
-        if signature.len() != CRYPTO_SIGN_BYTES {
+        if signature.len() != (CRYPTO_SIGN_BYTES as usize) {
             return Err(Error::InvalidArgument(format!("Signature must be {} bytes", CRYPTO_SIGN_BYTES)));
         }
 
-        if public_key.len() != CRYPTO_SIGN_PUBLICKEYBYTES {
+        if public_key.len() != (CRYPTO_SIGN_PUBLICKEYBYTES as usize) {
             return Err(Error::InvalidArgument(format!("Public key must be {} bytes", CRYPTO_SIGN_PUBLICKEYBYTES)));
         }
 
-        let sig: [u8; CRYPTO_SIGN_BYTES] = signature.try_into().unwrap();
-        let pk: [u8; CRYPTO_SIGN_PUBLICKEYBYTES] = public_key.try_into().unwrap();
-        match crypto_sign_verify_detached(&sig, response.as_bytes(), &pk) {
-            Ok(_) => return Ok(true),
-            Err(_error) => return Ok(false)
-        }
+        let sig: [u8; (CRYPTO_SIGN_BYTES as usize)] = signature.try_into().unwrap();
+        let pk: [u8; (CRYPTO_SIGN_PUBLICKEYBYTES as usize)] = public_key.try_into().unwrap();
+        let result = unsafe { crypto_sign_verify_detached(
+            sig.as_ptr(),
+            response.as_ptr(),
+            response.len() as u64,
+            pk.as_ptr()
+        ) };
+
+        match result {
+            0 => return Ok(true),
+            _ => return Ok(false)
+        };
     }
 
     ///  Extracts the public key from a v2 response
@@ -209,7 +226,7 @@ impl Response {
 
     /// Creates a response from the secret key
     pub fn from(secret_key: Vec<u8>) -> Result<Self, Error> {
-        if secret_key.len() != CRYPTO_BOX_SECRETKEYBYTES {
+        if secret_key.len() != (CRYPTO_BOX_SECRETKEYBYTES as usize) {
             return Err(Error::InvalidArgument(format!("Secret key should be {} bytes", CRYPTO_BOX_SECRETKEYBYTES)));
         }
 

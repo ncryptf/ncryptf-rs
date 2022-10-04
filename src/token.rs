@@ -1,5 +1,8 @@
-use dryoc::constants::CRYPTO_SIGN_PUBLICKEYBYTES;
-use libsodium_sys::*;
+use libsodium_sys::{
+    crypto_sign_ed25519_sk_to_pk,
+    crypto_sign_PUBLICKEYBYTES as CRYPTO_SIGN_PUBLICKEYBYTES
+};
+
 use std::time::{SystemTime, UNIX_EPOCH};
 use crate::error::NcryptfError as Error;
 
@@ -67,7 +70,7 @@ impl Token {
 
     /// Returns the public key for the signature
     pub fn get_signature_public_key(&self) -> Result<Vec<u8>, Error> {
-        let public: [u8; CRYPTO_SIGN_PUBLICKEYBYTES as usize] = [0; CRYPTO_SIGN_PUBLICKEYBYTES as usize];
+        let public: [u8; (CRYPTO_SIGN_PUBLICKEYBYTES as usize) as usize] = [0; (CRYPTO_SIGN_PUBLICKEYBYTES as usize)];
         let sk = self.signature.clone().as_mut_ptr();
 
         let result = unsafe { crypto_sign_ed25519_sk_to_pk(sk, public.as_ptr()) };

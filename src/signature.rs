@@ -1,8 +1,14 @@
 extern crate base64;
-use dryoc::{generichash::GenericHash, sign::SigningKeyPair};
 use chrono::{
     DateTime,
     offset::Utc
+};
+
+use libsodium_sys::{
+    crypto_sign_keypair,
+    crypto_generichash,
+    crypto_sign_PUBLICKEYBYTES as CRYPTO_SIGN_PUBLICKEYBYTES,
+    crypto_sign_SECRETKEYBYTES as CRYPTO_SIGN_SECRETKEYBYTES
 };
 
 use crate::Keypair;
@@ -29,10 +35,14 @@ impl Signature {
 
     /// Generates a new random signature
     pub fn new() -> Keypair {
-        let kp = SigningKeyPair::gen_with_defaults();
+        let mut sk: [u8; CRYPTO_SIGN_SECRETKEYBYTES as usize] = vec![0; CRYPTO_SIGN_SECRETKEYBYTES as usize].try_into().unwrap();
+        let mut pk: [u8; CRYPTO_SIGN_PUBLICKEYBYTES as usize] = vec![0; CRYPTO_SIGN_PUBLICKEYBYTES as usize].try_into().unwrap();
+        
+        let _result = unsafe { crypto_sign_keypair(pk.as_mut_ptr(), sk.as_mut_ptr())};
+        
         return Keypair {
-            secret_key: kp.secret_key.to_vec(),
-            public_key: kp.public_key.to_vec()
+            secret_key: sk.to_vec(),
+            public_key: pk.to_vec()
         }
     }
 
@@ -42,7 +52,16 @@ impl Signature {
             Some(2) => {
                 let s: &[u8; 32] = &salt.try_into().unwrap();
                 let input = data.as_bytes();
-                let hash: Vec<u8> = GenericHash::<32, 64>::hash(input, Some(s)).unwrap();
+                let mut hash: [u8; 64] = vec![0; 64].try_into().unwrap();
+
+                let _result = unsafe { crypto_generichash(
+                    hash.as_mut_ptr(),
+                    64,
+                    input.as_ptr(),
+                    input.len() as u64,
+                    s.as_ptr(),
+                    32
+                ) };
 
                 return base64::encode(&hash);
             },

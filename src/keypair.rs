@@ -1,14 +1,10 @@
-
-use dryoc::{
-    dryocbox::KeyPair,
-    constants::{
-        CRYPTO_BOX_PUBLICKEYBYTES,
-        CRYPTO_BOX_SECRETKEYBYTES
-    }
-};
-
 use crate::error::NcryptfError as Error;
 
+use libsodium_sys::{
+    crypto_box_keypair,
+    crypto_box_PUBLICKEYBYTES as CRYPTO_BOX_PUBLICKEYBYTES,
+    crypto_box_SECRETKEYBYTES as CRYPTO_BOX_SECRETKEYBYTES
+};
 #[derive(Debug, Clone)]
 pub struct Keypair {
     pub secret_key: Vec<u8>,
@@ -18,20 +14,23 @@ pub struct Keypair {
 impl Keypair {
     /// Generates a new keypair
     pub fn new() -> Self {
-        let kp = KeyPair::gen();
+        let mut sk: [u8; CRYPTO_BOX_SECRETKEYBYTES as usize] = vec![0; CRYPTO_BOX_SECRETKEYBYTES as usize].try_into().unwrap();
+        let mut pk: [u8; CRYPTO_BOX_PUBLICKEYBYTES as usize] = vec![0; CRYPTO_BOX_PUBLICKEYBYTES as usize].try_into().unwrap();
+        
+        let _result = unsafe { crypto_box_keypair(pk.as_mut_ptr(), sk.as_mut_ptr())};
         return Keypair {
-            secret_key: kp.secret_key.to_vec(),
-            public_key: kp.public_key.to_vec()
+            secret_key: sk.to_vec(),
+            public_key: pk.to_vec()
         }
     }
 
     /// Constructs a keypair from an existing secret key and public key
     pub fn from(sk: Vec<u8>, pk: Vec<u8>) -> Result<Self, Error> {
-        if sk.len() % 16 != 0 && sk.len() != CRYPTO_BOX_PUBLICKEYBYTES {
+        if sk.len() % 16 != 0 && sk.len() != (CRYPTO_BOX_PUBLICKEYBYTES as usize) {
             return Err(Error::InvalidArgument(format!("Secret key should be a multiple of {} bytes", 16)));
         }
 
-        if pk.len() % 4 != 0 && pk.len() != CRYPTO_BOX_SECRETKEYBYTES  {
+        if pk.len() % 4 != 0 && pk.len() != (CRYPTO_BOX_SECRETKEYBYTES as usize) {
             return Err(Error::InvalidArgument(format!("Public key should be a multiple of {} bytes", 16)));
         }
 

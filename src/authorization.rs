@@ -1,7 +1,12 @@
-use crate::{token::Token, signature::Signature};
-use crate::error::NcryptfError as Error;
-use chrono::Timelike;
+use crate::{
+    token::Token,
+    signature::Signature,
+    error::NcryptfError as Error,
+    util::randombytes_buf
+};
+
 use chrono::{
+    Timelike,
     DateTime,
     offset::Utc
 };
@@ -9,7 +14,6 @@ use serde::{Serialize, Deserialize};
 use sha2::Sha256;
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
-use dryoc::rng::randombytes_buf;
 
 const AUTH_INFO: &str = "HMAC|AuthenticationKey";
 
