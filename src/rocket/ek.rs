@@ -9,7 +9,7 @@ pub struct EncryptionKey {
     bkp: Keypair,
     skp: Keypair,
     ephemeral: bool,
-    expires_at: i64,
+    pub expires_at: i64,
     hash_id: String
 }
 
@@ -34,6 +34,17 @@ impl EncryptionKey {
         return self.hash_id.clone();
     }
 
+    /// Returns true if the token is expired
+    /// Expiration should be handled server side
+    /// But the client should know if they need a new key
+    pub fn is_expired(&self) -> bool {
+        if self.expires_at.clone() > chrono::Utc::now().timestamp() {
+            return true;
+        }
+
+        return false;
+    }
+
     /// Creates a new struct with an ephemeral flag set
     pub fn new(ephemeral: bool) -> Self {
         let s: String = rand::thread_rng()
@@ -46,7 +57,7 @@ impl EncryptionKey {
             bkp: Keypair::new(),
             skp: Signature::new(),
             ephemeral: ephemeral,
-            expires_at: chrono::Utc::now().timestamp(),
+            expires_at: chrono::Utc::now().timestamp() + 3600,
             hash_id: s
         }
     }

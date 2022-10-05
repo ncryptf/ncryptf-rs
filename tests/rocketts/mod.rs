@@ -1,13 +1,7 @@
 use rocket::{local::blocking::Client, http::Header};
 use serde::Deserialize;
 use redis::Commands;
-use rocket::serde::{Serialize, json::Json};
-use rocket_db_pools::{Database, deadpool_redis};
-
-/// This is our mock Redis figment
-#[derive(Database)]
-#[database("cache")]
-pub struct RedisDb(deadpool_redis::Pool);
+use rocket::serde::{Serialize};
 
 /// A simple test struct
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -19,8 +13,8 @@ struct TestStruct<'r> {
 #[post("/echo", data="<data>")]
 fn echo(
     data: ncryptf::rocket::Json<TestStruct>
-) -> rocket::serde::json::Json<TestStruct> {
-    return Json(data.0);
+) -> ncryptf::rocket::Json<TestStruct> {
+    return ncryptf::rocket::Json(data.0);
 }
 
 fn setup() -> Client{
@@ -77,8 +71,55 @@ fn get_ek() -> ncryptf::rocket::EncryptionKey {
     return ek;
 }
 
+/// This will send an ncryptf encrypted message, and should receive back an ncryptf encrypted response
 #[test]
 fn test_echo() {
+    let client = setup();
+
+    let ek = get_ek();
+    let json: serde_json::Value = serde_json::from_str(r#"{ "hello": "world"}"#).unwrap();
+
+    let kp = ncryptf::Keypair::new();
+    let sk = ncryptf::Signature::new();
+    let req = ncryptf::Request::from(
+        kp.get_secret_key(),
+        sk.get_secret_key()
+    );
+
+    let req_body = req.unwrap().encrypt(
+        json.to_string(),
+        ek.get_box_kp().get_public_key()
+    ).unwrap();
+    let astr = base64::encode(req_body.clone());
+
+    let vr = ncryptf::Response::get_version(req_body.clone());
+    assert_eq!(vr.unwrap(), 2);
+
+    let response = client.post("/echo")
+        .body(astr)
+        .header(Header::new("Content-Type", "application/vnd.ncryptf+json"))
+        .header(Header::new("Accept", "application/vnd.ncryptf+json"))
+        .header(Header::new("X-HashId", ek.get_hash_id()))
+        .dispatch();
+
+    // We should get an HTTP 200 back
+    assert_eq!(response.status().code, 200);
+    let body = response.into_string().unwrap();
+    let bbody = base64::decode(body.clone()).unwrap();
+    let r = ncryptf::Response::from(kp.get_secret_key()).unwrap();
+
+    let message = r.decrypt(
+        bbody,
+        None,
+        None
+    );
+    assert!(message.is_ok());
+    assert_eq!(message.unwrap(), json.to_string());
+}
+
+/// This will send an ncryptf encrypted message, but will recieve back a plaintext message
+#[test]
+fn test_echo_plain() {
     let client = setup();
 
     let ek = get_ek();
@@ -96,8 +137,11 @@ fn test_echo() {
 
     let response = client.post("/echo")
         .body(astr)
+        .header(Header::new("Content-Type", "application/vnd.ncryptf+json"))
+        .header(Header::new("Accept", "application/json"))
         .header(Header::new("X-HashId", ek.get_hash_id()))
         .dispatch();
 
-    assert_eq!(response.into_string().unwrap(), json.to_string());
+    let body = response.into_string().unwrap();
+    assert_eq!(body, json.to_string());
 }
