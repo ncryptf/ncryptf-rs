@@ -17,6 +17,13 @@ fn echo(
     return ncryptf::rocket::Json(data.0);
 }
 
+#[post("/echo2", data="<data>")]
+fn echo2(
+    data: rocket::serde::json::Json<TestStruct>
+) -> ncryptf::rocket::Json<TestStruct> {
+    return ncryptf::rocket::Json(data.0);
+}
+
 fn setup() -> Client{
     let config = rocket::Config::figment()
         .merge(("ident", false))
@@ -30,7 +37,7 @@ fn setup() -> Client{
         .merge(("log_level", rocket::config::LogLevel::Off));
 
     let rocket = rocket::custom(config)
-        .mount("/", routes![echo]);
+        .mount("/", routes![echo, echo2]);
 
     return match Client::tracked(rocket) {
         Ok(client) => client,
@@ -145,4 +152,38 @@ fn test_echo_plain() {
 
     let body = response.into_string().unwrap();
     assert_eq!(body, json.to_string());
+}
+
+/// Tests that ncryptf responses can be emitted from a plain text request
+#[test]
+fn test_echo_plain_to_encrypted() {
+    let client = setup();
+
+    let ek = get_ek();
+    let json: serde_json::Value = serde_json::from_str(r#"{ "hello": "world"}"#).unwrap();
+
+    let kp = ncryptf::Keypair::new();
+    let sk = ncryptf::Signature::new();
+
+    let response = client.post("/echo2")
+        .body(json.to_string())
+        .header(Header::new("Content-Type", "application/vndjson"))
+        .header(Header::new("Accept", "application/vnd.ncryptf+json"))
+        .header(Header::new("X-HashId", ek.get_hash_id()))
+        .header(Header::new("X-PubKey", base64::encode(kp.get_public_key())))
+        .dispatch();
+
+    // We should get an HTTP 200 back
+    assert_eq!(response.status().code, 200);
+    let body = response.into_string().unwrap();
+    let bbody = base64::decode(body.clone()).unwrap();
+    let r = ncryptf::Response::from(kp.get_secret_key()).unwrap();
+
+    let message = r.decrypt(
+        bbody,
+        None,
+        None
+    );
+    assert!(message.is_ok());
+    assert_eq!(message.unwrap(), json.to_string());
 }
