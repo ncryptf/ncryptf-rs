@@ -1,20 +1,35 @@
 use std::{io, fmt, error};
 
-use rocket::{response::{Response, Responder, content, self}, Request, http::{ContentType, Status}, Data, data::{Limits, FromData}, data::{Outcome, self}, request::{FromRequest, self}, State};
-use rocket::request::local_cache;
-use serde::{Serialize, Deserialize, Serializer};
-use super::NCRYPTF_CONTENT_TYPE;
+use rocket::{
+    response::{
+        Response,
+        Responder,
+        content,
+        self
+    },
+    Request, http::{
+        ContentType,
+        Status
+    },
+    Data,
+    data::{
+        Limits,
+        FromData,
+        Outcome
+    },
+    request::local_cache
+};
+use serde::{Serialize, Deserialize};
+use super::{NCRYPTF_CONTENT_TYPE, EncryptionKey};
+
+use redis::Commands;
 
 // Error returned by the [`Json`] guard when JSON deserialization fails.
 #[derive(Debug)]
 pub enum Error<'a> {
     /// An I/O error occurred while reading the incoming request data.
     Io(io::Error),
-
-    /// The client's data was received successfully but failed to parse as valid
-    /// JSON or as the requested type. The `&str` value in `.0` is the raw data
-    /// received from the user, while the `Error` in `.1` is the deserialization
-    /// error from `serde`.
+    /// Parser failure
     Parse(&'a str, serde_json::error::Error),
 }
 
@@ -36,7 +51,40 @@ impl<'a> error::Error for Error<'a> {
     }
 }
 
-/// Representation for an ncryptf encrypted JSON object
+///! ncryptf::rocket::Json represents a application/vnd.ncryptf+json, JSON string
+///! The JSON struct supports both serialization and de-serialization to reduce implementation time
+///!
+///! Usage:
+///!    Encryption keys and identifiers are stored in Redis. Make sure you have a `rocket_db_pool::Config` setup
+///!    for Redis, and added to your rocket figment()
+///!    ```rust
+///!    .merge(("databases.cache", rocket_db_pools::Config {
+///!            url: format!("redis://127.0.0.1:6379/"),
+///!            min_connections: None,
+///!            max_connections: 1024,
+///!            connect_timeout: 3,
+///!            idle_timeout: None,
+///!        }))
+///!    ````
+///!
+///!    Next, create a struct to represent the request data. This struct _must_ implement Serialize if you want to return a ncryptf encrypted response
+///!    ```rust
+///!     use rocket::serde::{Serialize, json::Json};
+///!
+///!     [derive(Serialize)]
+///!     #[serde(crate = "rocket::serde")]
+///!     struct TestStruct<'r> {
+///!         pub hello: &'r str
+///!     }
+///!    ```
+///!
+///!   Your request can now be parsed using data tags
+///!    ```rust
+///!        #[post("/echo", data="<data>")]
+///!        fn echo(data: ncryptf::rocket::Json<TestStruct>) {
+///!            // data.0 is your TestStruct
+///!        }
+///!    ```
 #[derive(Debug, Clone)]
 pub struct Json<T>(pub T);
 
@@ -65,32 +113,88 @@ impl<'r, T: Deserialize<'r>> Json<T> {
                 let eof = io::ErrorKind::UnexpectedEof;
                 return Err(Error::Io(io::Error::new(eof, "data limit exceeded")));
             },
-            Err(e) => return Err(Error::Io(e)),
+            Err(error) => return Err(Error::Io(error)),
         };
 
-        // How do we access Redis, or a generic cache instance from here?
-        // Config can be found here:
-        // let config = req.rocket().figment().find_value("databases.cache");
-        // But how can we access the original connection pool if the underlying struct is undefined in the library?
-        // Force redis then re-initialize a connection?
-        // Use stretto::AsyncCache::new(12960, 1e6 as i64, tokio::spawn).unwrap() ?
-        // How do we persist AnyCache?
-        let pk = req.headers().get_one("X-Pubkey").unwrap();
-        let sig_pk = req.headers().get_one("X-Sig-Pubkey").unwrap();
-        let sk= req.headers().get_one("X-Seckey").unwrap();
-        let sig_sk = req.headers().get_one("X-Sig-Seckey").unwrap();
 
-        match crate::Response::from(
-            base64::decode(sk).unwrap()
-        ) {
+        // Retrieve the redis connection string from the figment
+        let rdb = match req.rocket().figment().find_value("databases.cache") {
+            Ok(config) => {
+                let url = config.find("url");
+                if url.is_some() {
+                    let o = url.to_owned().unwrap();
+                    o.into_string().unwrap()
+                } else {
+                    return Err(Error::Io(io::Error::new(io::ErrorKind::Other, "Unable to retrieve Redis faring configuration.")));
+                }
+            },
+            Err(error) => {
+                return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
+            }
+        };
+
+        // Create a new client
+        let client = match redis::Client::open(rdb) {
+            Ok(client) => client,
+            Err(error) => {
+                return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
+            }
+        };
+
+        // Retrieve the connection string
+        let mut conn: redis::Connection = match client.get_connection() {
+            Ok(conn) => conn,
+            Err(error) => {
+                return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
+            }
+        };
+
+        let data = base64::decode(string).unwrap();
+        let hash_id = match req.headers().get_one("X-HashId") {
+            Some(h) => h,
+            None => {
+                return Err(Error::Io(io::Error::new(io::ErrorKind::Other, "Encryption key not found.")));
+            }
+        };
+
+        // Retrieve the encryption key
+        let json: String = match conn.get(hash_id) {
+            Ok(k) => k,
+            Err(error) => {
+                return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
+            }
+        };
+
+        let ek: EncryptionKey = match serde_json::from_str(&json) {
+            Ok(ek) => ek,
+            Err(error) => {
+                return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
+            }
+        };
+
+        let pk = ek.get_box_kp().get_public_key();
+        let sk = ek.get_box_kp().get_secret_key();
+
+        // Delete the key if it is ephemeral
+        if ek.is_ephemeral() {
+            match conn.del(hash_id) {
+                Ok(k) => k,
+                Err(error) => {
+                    return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
+                }
+            };
+        }
+
+        // Decrypt the response, then deserialize the underlying JSON into the requested struct
+        match crate::Response::from(sk) {
             Ok(response) => {
                 match response.decrypt(
-                    base64::decode(string).unwrap(),
-                    Some(base64::decode(pk).unwrap()),
-                     None
+                    data.clone(),
+                    Some(pk),
+                     None // todo!() this only supports v2 requests
                 ) {
                     Ok(msg) => {
-                       return  Self::from_str(local_cache!(req, msg));
+                       return Self::from_str(local_cache!(req, msg));
                     },
                     Err(error) =>{
                         return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
@@ -119,7 +223,6 @@ impl<'r, T: Deserialize<'r>> FromData<'r> for Json<T> {
                 Outcome::Failure((Status::UnprocessableEntity, Error::Parse(s, e)))
             },
             Err(e) => Outcome::Failure((Status::BadRequest, e)),
-
         }
     }
 }
@@ -129,15 +232,6 @@ impl<'r, T: Deserialize<'r>> FromData<'r> for Json<T> {
 ///! ncryptf version.
 ///!
 ///! Usage:
-///!
-///! ```rust
-///! use ncryptf::rocket::Json;
-///!
-///! #[get("/")]
-///! fn out() -> ncryptf::rocket::Json {
-///!    ncryptf::rocket::Json::from_str(r#"{ "Hello": "World!" }"#).unwrap()
-///! }
-///! ```
 impl<'r, T: Serialize> Responder<'r, 'static> for Json<T> {
     fn respond_to(self, req: &'r Request<'_>) -> response::Result<'static> {
         match req.headers().get_one("Accept") {
