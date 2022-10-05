@@ -188,7 +188,6 @@ impl<'r, T: Deserialize<'r>> Json<T> {
             }
         };
 
-        let pk = ek.get_box_kp().get_public_key();
         let sk = ek.get_box_kp().get_secret_key();
 
         // Delete the key if it is ephemeral
@@ -218,7 +217,7 @@ impl<'r, T: Deserialize<'r>> Json<T> {
 
                 match response.decrypt(
                     data.clone(),
-                    Some(pk),
+                    None,
                      None // todo!() this only supports v2 requests
                 ) {
                     Ok(msg) => {

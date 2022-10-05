@@ -133,7 +133,8 @@ fn test_echo_plain() {
     );
 
     let body = req.unwrap().encrypt(json.to_string(), ek.get_box_kp().get_public_key()).unwrap();
-    let astr = base64::encode(body);
+    assert_eq!(body.clone().len(), 253);
+    let astr = base64::encode(body.clone());
 
     let response = client.post("/echo")
         .body(astr)
