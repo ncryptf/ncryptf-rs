@@ -5,7 +5,6 @@ use rocket::serde::{Serialize};
 
 /// A simple test struct
 #[derive(Deserialize, Serialize, Clone, Debug)]
-
 struct TestStruct<'r> {
     pub hello: &'r str
 }
@@ -13,13 +12,6 @@ struct TestStruct<'r> {
 #[post("/echo", data="<data>")]
 fn echo(
     data: ncryptf::rocket::Json<TestStruct>
-) -> ncryptf::rocket::Json<TestStruct> {
-    return ncryptf::rocket::Json(data.0);
-}
-
-#[post("/echo2", data="<data>")]
-fn echo2(
-    data: rocket::serde::json::Json<TestStruct>
 ) -> ncryptf::rocket::Json<TestStruct> {
     return ncryptf::rocket::Json(data.0);
 }
@@ -37,11 +29,12 @@ fn setup() -> Client{
         .merge(("log_level", rocket::config::LogLevel::Off));
 
     let rocket = rocket::custom(config)
-        .mount("/", routes![echo, echo2]);
+        .mount("/", routes![echo]);
 
     return match Client::tracked(rocket) {
         Ok(client) => client,
         Err(_error) => {
+            dbg!(_error);
             panic!("Failed to create client");
         }
     };
@@ -163,11 +156,10 @@ fn test_echo_plain_to_encrypted() {
     let json: serde_json::Value = serde_json::from_str(r#"{ "hello": "world"}"#).unwrap();
 
     let kp = ncryptf::Keypair::new();
-    let sk = ncryptf::Signature::new();
 
-    let response = client.post("/echo2")
+    let response = client.post("/echo")
         .body(json.to_string())
-        .header(Header::new("Content-Type", "application/vndjson"))
+        .header(Header::new("Content-Type", "application/json"))
         .header(Header::new("Accept", "application/vnd.ncryptf+json"))
         .header(Header::new("X-HashId", ek.get_hash_id()))
         .header(Header::new("X-PubKey", base64::encode(kp.get_public_key())))
@@ -186,4 +178,21 @@ fn test_echo_plain_to_encrypted() {
     );
     assert!(message.is_ok());
     assert_eq!(message.unwrap(), json.to_string());
+}
+
+#[test]
+fn test_echo_plain_to_plain() {
+    let client = setup();
+    let json: serde_json::Value = serde_json::from_str(r#"{ "hello": "world"}"#).unwrap();
+
+    let response = client.post("/echo")
+        .body(json.to_string())
+        .header(Header::new("Content-Type", "application/json"))
+        .header(Header::new("Accept", "application/json"))
+        .dispatch();
+
+    // We should get an HTTP 200 back
+    assert_eq!(response.status().code, 200);
+    let body = response.into_string().unwrap();
+    assert_eq!(body, json.to_string());
 }
