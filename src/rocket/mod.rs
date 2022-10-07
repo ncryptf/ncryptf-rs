@@ -11,3 +11,5 @@ mod json;
 pub use json::Json;
 mod ek;
 pub use ek::EncryptionKey;
+mod fairing;
+pub use fairing::Fairing;

@@ -18,7 +18,7 @@ use rocket::{
     }
 };
 use serde::{Serialize, Deserialize};
-use super::{NCRYPTF_CONTENT_TYPE, EncryptionKey, RequestSigningPublicKey, RequestPublicKey};
+use super::{NCRYPTF_CONTENT_TYPE, EncryptionKey, RequestSigningPublicKey, RequestPublicKey, fairing::FairingConsumed};
 
 use redis::Commands;
 
@@ -108,59 +108,9 @@ impl<T> Json<T> {
     pub fn from_value(value: T) -> Self {
         return Self(value);
     }
-}
 
-/// Retrieves the cache
-fn get_cache<'r>(req: &'r Request<'_>) -> Result<redis::Connection, Error<'r>> {
-    // Retrieve the redis connection string from the figment
-    let rdb = match req.rocket().figment().find_value("databases.cache") {
-       Ok(config) => {
-           let url = config.find("url");
-           if url.is_some() {
-               let o = url.to_owned().unwrap();
-               o.into_string().unwrap()
-           } else {
-               return Err(Error::Io(io::Error::new(io::ErrorKind::Other, "Unable to retrieve Redis faring configuration.")));
-           }
-       },
-       Err(error) => {
-           return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
-       }
-   };
-
-   // Create a new client
-   let client = match redis::Client::open(rdb) {
-       Ok(client) => client,
-       Err(error) => {
-           return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
-       }
-   };
-
-   // Retrieve the connection string
-   match client.get_connection() {
-       Ok(conn) => return Ok(conn),
-       Err(error) => {
-           return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
-       }
-   };
-}
-
-impl<'r, T: Deserialize<'r>> Json<T> {
-    fn from_str(s: &'r str) -> Result<Self, Error<'r>> {
-        serde_json::from_str(s).map(Json).map_err(|e| Error::Parse(s, e))
-    }
-
-    async fn from_data(req: &'r Request<'_>, data: Data<'r>) -> Result<Self, Error<'r>> {
-        let limit = req.limits().get("json").unwrap_or(Limits::JSON);
-        let string = match data.open(limit).into_string().await {
-            Ok(s) if s.is_complete() => s.into_inner(),
-            Ok(_) => {
-                let eof = io::ErrorKind::UnexpectedEof;
-                return Err(Error::Io(io::Error::new(eof, "data limit exceeded")));
-            },
-            Err(error) => return Err(Error::Io(error)),
-        };
-
+    /// Deserializes the request sting into a raw JSON string
+    pub fn deserialize_req_from_string<'r>(req: &'r Request<'_>, string: String) -> Result<String, Error<'r>>{
         match req.headers().get_one("Content-Type") {
             Some(h) => {
                 match h {
@@ -257,7 +207,7 @@ impl<'r, T: Deserialize<'r>> Json<T> {
                                     Ok(msg) => {
                                         // Serialize this into a struct, and store the decrypted response in the cache
                                         // We'll need this for the Authorization header
-                                         return Self::from_str(req.local_cache(|| return msg));
+                                         return Ok(req.local_cache(|| return msg).to_owned());
                                     },
                                     Err(error) =>{
                                         return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
@@ -271,17 +221,86 @@ impl<'r, T: Deserialize<'r>> Json<T> {
                     },
                     // If this is a json request, return raw json
                     "json" => {
-                        return Self::from_str(req.local_cache(|| return string));
+                        return Ok(req.local_cache(|| return string).to_owned());
                     },
                     // For now, return JSON even if another header was sent.
                     _ => {
-                        return Self::from_str(req.local_cache(|| return string));
+                        return Ok(req.local_cache(|| return string).to_owned());
                     }
                 }
             },
             // If there isn't an Accept header, also return JSON
             None => {
-                return Self::from_str(req.local_cache(|| return string));
+                return Ok(req.local_cache(|| return string).to_owned());
+            }
+        };
+    }
+}
+
+/// Retrieves the cache
+fn get_cache<'r>(req: &'r Request<'_>) -> Result<redis::Connection, Error<'r>> {
+    // Retrieve the redis connection string from the figment
+    let rdb = match req.rocket().figment().find_value("databases.cache") {
+       Ok(config) => {
+           let url = config.find("url");
+           if url.is_some() {
+               let o = url.to_owned().unwrap();
+               o.into_string().unwrap()
+           } else {
+               return Err(Error::Io(io::Error::new(io::ErrorKind::Other, "Unable to retrieve Redis faring configuration.")));
+           }
+       },
+       Err(error) => {
+           return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
+       }
+   };
+
+   // Create a new client
+   let client = match redis::Client::open(rdb) {
+       Ok(client) => client,
+       Err(error) => {
+           return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
+       }
+   };
+
+   // Retrieve the connection string
+   match client.get_connection() {
+       Ok(conn) => return Ok(conn),
+       Err(error) => {
+           return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
+       }
+   };
+}
+
+impl<'r, T: Deserialize<'r>> Json<T> {
+    fn from_str(s: &'r str) -> Result<Self, Error<'r>> {
+        return serde_json::from_str(s).map(Json).map_err(|e| Error::Parse(s, e));
+    }
+
+    async fn from_data(req: &'r Request<'_>, data: Data<'r>) -> Result<Self, Error<'r>> {
+        let is_consumed = req.local_cache(|| FairingConsumed(false));
+        match is_consumed.0 {
+            // If the fairing is attached and we have already decrypted the string, we can simply return it as is without needing to decrypt it a second time
+            true => {
+                return Self::from_str(req.local_cache(|| return "".to_string()));
+            },
+            false => {
+                let limit = req.limits().get("json").unwrap_or(Limits::JSON);
+                let string = match data.open(limit).into_string().await {
+                    Ok(s) if s.is_complete() => s.into_inner(),
+                    Ok(_) => {
+                        let eof = io::ErrorKind::UnexpectedEof;
+                        return Err(Error::Io(io::Error::new(eof, "data limit exceeded")));
+                    },
+                    Err(error) => return Err(Error::Io(error)),
+                };
+
+                match Self::deserialize_req_from_string(req, string) {
+                    Ok(s) =>{
+                        return Self::from_str(req.local_cache(|| return s));
+                    },
+                    Err(error) => return Err(error)
+                };
             }
         };
     }

@@ -3,6 +3,8 @@ use serde::Deserialize;
 use redis::Commands;
 use rocket::serde::{Serialize};
 
+use ncryptf::rocket::Fairing as NcryptfFairing;
+
 /// A simple test struct
 #[derive(Deserialize, Serialize, Clone, Debug)]
 struct TestStruct<'r> {
@@ -29,6 +31,7 @@ fn setup() -> Client{
         .merge(("log_level", rocket::config::LogLevel::Off));
 
     let rocket = rocket::custom(config)
+        .attach(NcryptfFairing)
         .mount("/", routes![echo]);
 
     return match Client::tracked(rocket) {

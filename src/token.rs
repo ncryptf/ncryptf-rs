@@ -5,8 +5,9 @@ use libsodium_sys::{
 
 use std::time::{SystemTime, UNIX_EPOCH};
 use crate::error::NcryptfError as Error;
+use serde::{Serialize, Deserialize};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Token {
     pub access_token: String,
     pub refresh_token: String,
