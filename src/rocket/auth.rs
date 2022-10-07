@@ -7,12 +7,13 @@ pub enum TokenError {
     InvalidToken
 }
 
-
 #[rocket::async_trait]
 impl<'r> FromRequest<'r> for crate::Token {
     type Error = TokenError;
 
     async fn from_request(req: &'r Request<'_>) -> request::Outcome<Self, Self::Error> {
+
+        dbg!(req.local_cache(|| return "".to_string()));
 
         let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)

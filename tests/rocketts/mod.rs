@@ -18,6 +18,15 @@ fn echo(
     return ncryptf::rocket::Json(data.0);
 }
 
+#[post("/auth_echo", data="<data>")]
+fn auth_echo(
+    data: ncryptf::rocket::Json<TestStruct>,
+    auth: ncryptf::Token,
+) -> ncryptf::rocket::Json<TestStruct> {
+    dbg!(auth);
+    return ncryptf::rocket::Json(data.0);
+}
+
 fn setup() -> Client{
     let config = rocket::Config::figment()
         .merge(("ident", false))
@@ -32,7 +41,7 @@ fn setup() -> Client{
 
     let rocket = rocket::custom(config)
         .attach(NcryptfFairing)
-        .mount("/", routes![echo]);
+        .mount("/", routes![echo, auth_echo]);
 
     return match Client::tracked(rocket) {
         Ok(client) => client,
@@ -189,6 +198,23 @@ fn test_echo_plain_to_plain() {
     let json: serde_json::Value = serde_json::from_str(r#"{ "hello": "world"}"#).unwrap();
 
     let response = client.post("/echo")
+        .body(json.to_string())
+        .header(Header::new("Content-Type", "application/json"))
+        .header(Header::new("Accept", "application/json"))
+        .dispatch();
+
+    // We should get an HTTP 200 back
+    assert_eq!(response.status().code, 200);
+    let body = response.into_string().unwrap();
+    assert_eq!(body, json.to_string());
+}
+
+#[test]
+fn test_auth_echo_plain_to_plain() {
+    let client = setup();
+    let json: serde_json::Value = serde_json::from_str(r#"{ "hello": "world"}"#).unwrap();
+
+    let response = client.post("/auth_echo")
         .body(json.to_string())
         .header(Header::new("Content-Type", "application/json"))
         .header(Header::new("Accept", "application/json"))

@@ -13,3 +13,4 @@ mod ek;
 pub use ek::EncryptionKey;
 mod fairing;
 pub use fairing::Fairing;
+mod auth;

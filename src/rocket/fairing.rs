@@ -29,7 +29,7 @@ impl RocketFairing for Fairing {
                 // consumed this data
                 //
                 // Other content types should work as-is without changes since we're only consuming this for specific content types
-                if h.eq(crate::rocket::NCRYPTF_CONTENT_TYPE) || h.eq("json") {
+                if h.eq(crate::rocket::NCRYPTF_CONTENT_TYPE) || h.eq("application/json") {
                     // .open won't let us read but we can "peek" the full length of the request
                     let limit = req.limits().get("json").unwrap_or(Limits::JSON);
                     let ds = data.peek(limit.as_u64() as usize).await;
