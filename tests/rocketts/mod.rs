@@ -1,9 +1,15 @@
+use ncryptf::{ek_route, rocket::ExportableEncryptionKeyData};
 use rocket::{local::blocking::Client, http::Header};
 use serde::Deserialize;
 use redis::Commands;
 use rocket::serde::{Serialize};
 
 use ncryptf::rocket::Fairing as NcryptfFairing;
+use rocket_db_pools::{Database, deadpool_redis};
+
+#[derive(Database)]
+#[database("cache")]
+pub struct RedisDb(deadpool_redis::Pool);
 
 /// A simple test struct
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -39,9 +45,12 @@ fn setup() -> Client{
         }))
         .merge(("log_level", rocket::config::LogLevel::Off));
 
+    ek_route!(RedisDb);
+
     let rocket = rocket::custom(config)
         .attach(NcryptfFairing)
-        .mount("/", routes![echo, auth_echo]);
+        .attach(RedisDb::init())
+        .mount("/", routes![echo, auth_echo, ncryptf_ek_route]);
 
     return match Client::tracked(rocket) {
         Ok(client) => client,
@@ -81,6 +90,41 @@ fn get_ek() -> ncryptf::rocket::EncryptionKey {
     };
 
     return ek;
+}
+
+/// Verifies that the ncryptf_ek_route export Macro generates appropriately and can be called
+#[test]
+fn test_ek_route_plain() {
+    let client = setup();
+    let response = client.get("/ek")
+        .header(Header::new("Content-Type", "application/json"))
+        .header(Header::new("Accept", "application/json"))
+        .dispatch();
+
+    // We should get an HTTP 200 back
+    assert_eq!(response.status().code, 200);
+    let body = response.into_string().unwrap();
+    match serde_json::from_str::<ExportableEncryptionKeyData>(&body) {
+        Ok(json) => {
+            assert_ne!(json.hash_id, "".to_string());
+            assert_ne!(json.public, "".to_string());
+            assert_ne!(json.signature, "".to_string());
+
+            // Verify that the data is the correct length and that we deserialized the struct correctly.
+            let signature = base64::decode(json.signature);
+            let public = base64::decode(json.public);
+            assert!(signature.is_ok());
+            assert!(public.is_ok());
+            let s = signature.unwrap();
+            let p = public.unwrap();
+
+            assert_eq!(s.len(), 32);
+            assert_eq!(p.len(), 32);
+        },
+        Err(_) => {
+            return assert!(false);
+        }
+    }
 }
 
 /// This will send an ncryptf encrypted message, and should receive back an ncryptf encrypted response

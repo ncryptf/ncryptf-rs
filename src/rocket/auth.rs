@@ -1,6 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use rocket::{request::{self, Request, FromRequest}, http::Status, outcome::Outcome};
+use rocket::{request::{self, Request, FromRequest}, outcome::Outcome};
 
 #[derive(Clone, Debug)]
 pub enum TokenError {
