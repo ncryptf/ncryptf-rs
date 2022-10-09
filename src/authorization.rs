@@ -17,6 +17,15 @@ use hmac::{Hmac, Mac};
 
 const AUTH_INFO: &str = "HMAC|AuthenticationKey";
 
+#[derive(Debug)]
+pub struct AuthParams {
+    pub access_token: String,
+    pub hmac: Vec<u8>,
+    pub salt: Vec<u8>,
+    pub version: Option<i8>,
+    pub date: Option<DateTime<Utc>>
+}
+
 #[derive(Debug, Clone)]
 pub struct Authorization {
     pub token: Token,
@@ -151,6 +160,41 @@ impl Authorization {
             }
         };
     }
+    
+    /// Extracts the parameters from the header string
+    pub fn extract_params_from_header_string(header: String) -> Result<AuthParams, Error> {
+        if header.starts_with("HMAC ") {
+            let auth_header = header.replace("HMAC ", "");
+            if auth_header.contains(",") {
+                let mut params: Vec<String> = auth_header.split(",").map(|s| s.to_string()).collect();
+                if params.len() != 3 {
+                    return Err(Error::InvalidArgument(String::from("Header parameters are not valid.")));
+                }
+
+                return Ok(
+                    AuthParams {
+                        access_token: params.pop().unwrap(),
+                        hmac: base64::decode(params.pop().unwrap()).unwrap(),
+                        salt: base64::decode(params.pop().unwrap()).unwrap(),
+                        version: Some(1),
+                        date: None
+                    }
+                );                
+            } else {
+                let json = base64::decode(auth_header).unwrap();
+                match serde_json::from_str::<serde_json::Value>(String::from_utf8(json).unwrap().as_str()) {
+                    Ok(params) => {
+                        // todo!() need to deserialize all of the values and populate the struct for return
+                        let access_token = params.get("access_token").unwrap().as_str().unwrap().to_string();
+                    },
+                    _ => {}
+                };
+            }
+        }
+
+        return Err(Error::InvalidArgument(String::from("Header parameters are not valid.")));
+    }
+
 }
 
 /// Internal structure for JSON serialization

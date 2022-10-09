@@ -1,3 +1,5 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use ncryptf::{ek_route, rocket::ExportableEncryptionKeyData};
 use rocket::{local::blocking::Client, http::Header};
 use serde::Deserialize;
@@ -6,6 +8,41 @@ use rocket::serde::{Serialize};
 
 use ncryptf::rocket::Fairing as NcryptfFairing;
 use rocket_db_pools::{Database, deadpool_redis};
+
+// This is a mock user used to simplify return data
+#[derive(Debug, Clone)]
+pub struct User {
+    pub id: i32
+}
+
+// Implement the Authorization Trait
+#[async_trait]
+impl ncryptf::rocket::AuthorizationTrait for User {
+    /// Our static implementation returns a static token
+    async fn get_token_from_access_token(access_token: String) -> Result<ncryptf::Token, ncryptf::rocket::TokenError> {
+        let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+        let token =  ncryptf::Token::from(
+            "x2gMeJ5Np0CcKpZav+i9iiXeQBtaYMQ/yeEtcOgY3J".to_string(),
+            "LRSEe5zHb1aq20Hr9te2sQF8sLReSkO8bS1eD/9LDM8".to_string(),
+            base64::decode("f2mTaH9vkZZQyF7SxVeXDlOSDbVwjUzhdXv2T/YYO8k=").unwrap().to_vec(),
+            base64::decode("7v/CdiGoEI7bcj7R2EyDPH5nrCd2+7rHYNACB+Kf2FMx405und2KenGjNpCBPv0jOiptfHJHiY3lldAQTGCdqw==").unwrap().to_vec(),
+            now + 14400
+        ).unwrap();
+
+        return Ok(token);
+    }
+
+    /// Returns a static user from an authorization token
+    async fn get_user_from_token(token: ncryptf::Token) -> Result<Box<Self>, ncryptf::rocket::TokenError> {
+        return Ok(Box::new(User { id: 1 }));
+    }
+}
+
+ncryptf::auth!(User);
 
 #[derive(Database)]
 #[database("cache")]
@@ -27,13 +64,13 @@ fn echo(
 #[post("/auth_echo", data="<data>")]
 fn auth_echo(
     data: ncryptf::rocket::Json<TestStruct>,
-    auth: ncryptf::Token,
+    user: User,
 ) -> ncryptf::rocket::Json<TestStruct> {
-    dbg!(auth);
     return ncryptf::rocket::Json(data.0);
 }
 
 fn setup() -> Client{
+
     let config = rocket::Config::figment()
         .merge(("ident", false))
         .merge(("databases.cache", rocket_db_pools::Config {
@@ -50,7 +87,8 @@ fn setup() -> Client{
     let rocket = rocket::custom(config)
         .attach(NcryptfFairing)
         .attach(RedisDb::init())
-        .mount("/", routes![echo, auth_echo, ncryptf_ek_route]);
+        .mount("/", routes![echo, auth_echo])
+        .mount("/ncryptf", routes![ncryptf_ek_route]);
 
     return match Client::tracked(rocket) {
         Ok(client) => client,
@@ -96,7 +134,7 @@ fn get_ek() -> ncryptf::rocket::EncryptionKey {
 #[test]
 fn test_ek_route_plain() {
     let client = setup();
-    let response = client.get("/ek")
+    let response = client.get("/ncryptf/ek")
         .header(Header::new("Content-Type", "application/json"))
         .header(Header::new("Accept", "application/json"))
         .dispatch();

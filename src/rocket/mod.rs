@@ -1,8 +1,8 @@
 use crate::rocket::json::Error as Error;
 use std::io;
 
-const NCRYPTF_CONTENT_TYPE: &str = "application/vnd.ncryptf+json";
-const NCRYPTF_DRIFT_ALLOWANCE: i32 = 90;
+pub const NCRYPTF_CONTENT_TYPE: &str = "application/vnd.ncryptf+json";
+pub const NCRYPTF_DRIFT_ALLOWANCE: u32 = 90;
 
 #[derive(Debug, Clone)]
 pub struct RequestPublicKey(pub Vec<u8>);
@@ -16,13 +16,16 @@ mod ek;
 pub use ek::EncryptionKey;
 pub use ek::ExportableEncryptionKeyData;
 pub use ek::EkRoute;
+pub use auth::AuthorizationTrait;
+pub use auth::RocketAuth;
+pub use auth::TokenError;
 mod fairing;
 pub use fairing::Fairing;
 use rocket::Request;
 mod auth;
 
 /// Retrieves the cache
-fn get_cache<'r>(req: &'r Request<'_>) -> Result<redis::Connection, Error<'r>> {
+pub fn get_cache<'r>(req: &'r Request<'_>) -> Result<redis::Connection, Error<'r>> {
     // Retrieve the redis connection string from the figment
     let rdb = match req.rocket().figment().find_value("databases.cache") {
        Ok(config) => {
