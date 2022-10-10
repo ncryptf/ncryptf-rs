@@ -1,3 +1,4 @@
+const VERSION_2_HEADER: &str = "DE259002";
 mod token;
 pub use token::Token;
 mod keypair;
@@ -15,15 +16,11 @@ pub use signature::Signature;
 pub mod util;
 pub use util::randombytes_buf;
 
+/*
 #[cfg(feature = "reqwest")]
 mod reqwest;
 #[cfg(feature = "reqwest")]
 pub use reqwest::*;
-
+*/
 #[cfg(feature = "rocket")]
-mod rocket;
-
-#[cfg(feature = "rocket")]
-pub use rocket::*;
-
-const VERSION_2_HEADER: &str = "DE259002";
+pub mod rocket;

@@ -77,7 +77,7 @@ fn test_verify_hmac() {
 
         assert!(auth.is_ok());
         let a = auth.unwrap();
-        let result = a.verify(a.get_hmac(), 32);
+        let result = a.verify(a.get_hmac(), 60);
         assert!(result == true);
     }
 }

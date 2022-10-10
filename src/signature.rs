@@ -13,7 +13,6 @@ use libsodium_sys::{
 
 use crate::Keypair;
 
-#[derive(Debug, Clone)]
 pub struct Signature;
 
 impl Signature {
@@ -37,9 +36,9 @@ impl Signature {
     pub fn new() -> Keypair {
         let mut sk: [u8; CRYPTO_SIGN_SECRETKEYBYTES as usize] = vec![0; CRYPTO_SIGN_SECRETKEYBYTES as usize].try_into().unwrap();
         let mut pk: [u8; CRYPTO_SIGN_PUBLICKEYBYTES as usize] = vec![0; CRYPTO_SIGN_PUBLICKEYBYTES as usize].try_into().unwrap();
-        
+
         let _result = unsafe { crypto_sign_keypair(pk.as_mut_ptr(), sk.as_mut_ptr())};
-        
+
         return Keypair {
             secret_key: sk.to_vec(),
             public_key: pk.to_vec()

@@ -1,11 +1,12 @@
 use crate::error::NcryptfError as Error;
+use serde::{Deserialize, Serialize};
 
 use libsodium_sys::{
     crypto_box_keypair,
     crypto_box_PUBLICKEYBYTES as CRYPTO_BOX_PUBLICKEYBYTES,
     crypto_box_SECRETKEYBYTES as CRYPTO_BOX_SECRETKEYBYTES
 };
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Keypair {
     pub secret_key: Vec<u8>,
     pub public_key: Vec<u8>
@@ -16,7 +17,7 @@ impl Keypair {
     pub fn new() -> Self {
         let mut sk: [u8; CRYPTO_BOX_SECRETKEYBYTES as usize] = vec![0; CRYPTO_BOX_SECRETKEYBYTES as usize].try_into().unwrap();
         let mut pk: [u8; CRYPTO_BOX_PUBLICKEYBYTES as usize] = vec![0; CRYPTO_BOX_PUBLICKEYBYTES as usize].try_into().unwrap();
-        
+
         let _result = unsafe { crypto_box_keypair(pk.as_mut_ptr(), sk.as_mut_ptr())};
         return Keypair {
             secret_key: sk.to_vec(),

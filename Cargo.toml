@@ -5,7 +5,7 @@ description = "Secure API authentication and end to end encryption."
 repository = "https://github.com/ncryptf/ncryptf-rs"
 license = "BSD-3-Clause"
 categories = ["cryptography", "authentication", "api-bindings"]
-version = "0.2.1"
+version = "0.2.3"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -24,15 +24,21 @@ serde_json = { version = "1", features = ["raw_value"] }
 reqwest = { version = "^0.11", optional = true, features = ["json"] }
 constant_time_eq = { version = "^0.2" }
 hex = { version =  "^0.4" }
-rocket = { version = "0.5.0-rc.2", optional = true  }
+rand = { version = "0.8.5" }
+rocket = { version = "0.5.0-rc.2", features = ["json"], optional = true  }
+rocket_db_pools = { version = "0.1.0-rc.2", features = ["deadpool_redis"], optional = true }
+redis = { version = "0.21.6", features = ["aio", "async-std"], optional = true }
+async-trait = { version = "^0.1", optional = true }
 
 [lib]
 name = "ncryptf"
 
 [features]
 default = []
-rocket = ["dep:rocket"]
+rocket = ["dep:rocket", "dep:rocket_db_pools", "dep:redis", "dep:async-trait"]
 reqwest = ["dep:reqwest"]
 
 [dev-dependencies]
+rocket = { version = "0.5.0-rc.2"  }
 reqwest = { version = "^0.11", features = ["json", "blocking"] }
+rocket_db_pools = { version = "0.1.0-rc.2", features = ["deadpool_redis"]}

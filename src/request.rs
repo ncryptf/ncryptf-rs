@@ -10,22 +10,34 @@ use libsodium_sys::{
     crypto_box_SECRETKEYBYTES as CRYPTO_BOX_SECRETKEYBYTES,
     crypto_box_PUBLICKEYBYTES as CRYPTO_BOX_PUBLICKEYBYTES,
     crypto_box_NONCEBYTES as CRYPTO_BOX_NONCEBYTES,
+    crypto_box_MACBYTES as CRYPTO_BOX_MACBYTES,
 };
 
 use crate::util::randombytes_buf;
 use crate::{error::NcryptfError as Error, VERSION_2_HEADER};
 
-#[derive(Debug, Clone)]
 pub struct Request {
-    pub secret_key: Vec<u8>,
-    pub signature_secret_key: Vec<u8>,
-    pub nonce: Option<Vec<u8>>
+    secret_key: Vec<u8>,
+    signature_secret_key: Vec<u8>,
+    nonce: Option<Vec<u8>>,
+    message: Option<Vec<u8>>
 }
 
 impl Request {
     /// Encrypts a message with a given public key
     pub fn encrypt(&mut self, data: String, public_key: Vec<u8>) -> Result<Vec<u8>, Error> {
-        return self.encrypt_with_nonce(data, public_key, None, Some(2));
+        match self.encrypt_with_nonce(data, public_key, None, Some(2)) {
+            Ok(result) => {
+                self.message = Some(result.clone());
+                return Ok(result)
+            },
+            Err(error) => return Err(error)
+        };
+    }
+
+    /// Returns the message, if it has been set
+    pub fn get_message(&self) -> Option<Vec<u8>> {
+        return self.message.clone();
     }
 
     /// Encrypts a message with a given public key, none, and version identifier
@@ -119,8 +131,10 @@ impl Request {
 
     /// Internal encryption method
     fn encrypt_body(&self, data: String, public_key: Vec<u8>, nonce: Vec<u8>) -> Result<Vec<u8>, Error> {
-        let message = data.as_bytes();
-        let mut ciphertext = Box::new(vec![0u8; message.len() + (CRYPTO_BOX_NONCEBYTES as usize)]);
+        let message = data.into_bytes();
+        let len = message.len();
+
+        let mut ciphertext = Box::new(vec![0u8; len + (CRYPTO_BOX_MACBYTES as usize)]);
         let sk:[u8; (CRYPTO_BOX_SECRETKEYBYTES as usize)] = self.secret_key.clone().try_into().unwrap();
         let pk: [u8; (CRYPTO_BOX_PUBLICKEYBYTES as usize)] = public_key.clone().try_into().unwrap();
         let n: [u8; (CRYPTO_BOX_NONCEBYTES as usize)] = nonce.clone().try_into().unwrap();
@@ -138,9 +152,7 @@ impl Request {
 
         match result {
             0 => {
-                let mut vec = ciphertext.to_vec();
-                vec.retain(|x| *x != 0);
-                return Ok(vec);
+                return Ok(ciphertext.to_vec());
             },
             _ => {
                 return Err(Error::DecryptError);
@@ -156,7 +168,7 @@ impl Request {
     /// Signs the given data, then returns a detached signature
     pub fn sign(&self, data: String) -> Result<Vec<u8>, Error> {
         let mut signature = [0u8; (CRYPTO_SIGN_BYTES as usize)];
-        let key:[u8; (CRYPTO_SIGN_SECRETKEYBYTES as usize)] = self.signature_secret_key.clone().try_into().unwrap();
+        let key: [u8; (CRYPTO_SIGN_SECRETKEYBYTES as usize)] = self.signature_secret_key.clone().try_into().unwrap();
 
         let mut signature_size = signature.len() as u64;
         let _result = unsafe {crypto_sign_detached(
@@ -186,7 +198,8 @@ impl Request {
         return Ok(Request {
             secret_key,
             signature_secret_key,
-            nonce: None
+            nonce: None,
+            message: None
         });
     }
 

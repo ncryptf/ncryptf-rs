@@ -13,7 +13,6 @@ use libsodium_sys::{
 
 use crate::{error::NcryptfError as Error, VERSION_2_HEADER};
 
-#[derive(Debug, Clone)]
 pub struct Response {
     pub secret_key: Vec<u8>
 }
@@ -35,7 +34,8 @@ impl Response {
             return Err(Error::InvalidArgument(format!("Nonce should be {} bytes", CRYPTO_BOX_NONCEBYTES)));
         }
 
-        match Self::get_version(response.clone()) {
+        let r = response.clone();
+        match Self::get_version(r) {
             Ok(version) => {
                 match version {
                     2 => return self.decrypt_v2(response, nonce),
@@ -115,13 +115,13 @@ impl Response {
             return Err(Error::DecryptError);
         }
 
-        let public_key = response.get(28..60).unwrap().to_vec();
+        let public_key =  Self::get_public_key_from_response(response.clone()).unwrap();
         let payload_len = payload.len();
         let signature = payload.get(payload_len-64..payload_len).unwrap().to_vec();
-        let signature_public_key = payload.get(payload_len-96..payload_len-64).unwrap().to_vec();
+        let signature_public_key = Self::get_signing_public_key_from_response(response).unwrap();
         let body = payload.get(60..payload_len-96).unwrap().to_vec();
 
-        let decrypted = self.decrypt_body(body, Some(public_key), nonce.clone())?;
+        let decrypted = self.decrypt_v1(body, public_key, nonce.clone())?;
 
         Self::is_signature_valid(decrypted.clone(), signature, signature_public_key)?;
 

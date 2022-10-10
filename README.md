@@ -76,6 +76,135 @@ The primary reason you may want to establish an encrypted session with the API i
 
 Review the `test/integration.rs` file for a full example of making requets and encrypting and decrypting responses.
 
+#### Rocket.rs Body Parsing, and Response Emitting
+This library provides a Rocket.rs specific implementation to handle incoming encrypted (and by proxy plain-text) JSON requests. Setup for handling this looks as follows:
+
+1. Your server must provide a Redis instance and it must be available to Rocket.
+
+2. Add a `databases.cache` configuration item for a rocket_Db_pools::Config
+
+```rust
+ let config = rocket::Config::figment()
+    .merge(("databases.cache", rocket_db_pools::Config {
+        url: format!("redis://127.0.0.1:6379/"),
+        min_connections: None,
+        max_connections: 1024,
+        connect_timeout: 3,
+        idle_timeout: None,
+    }))
+```
+
+3. Your request will now be able to parse and accept application/json and application/vnd.ncryptf+json by adding a body acceptor for ncryptf::rocket::Json<T>. Both requests and responses can be consumed and emitted this way.
+
+```rust
+#[post("/echo", data="<data>")]
+fn echo(data: ncryptf::rocket::Json<TestStruct>) -> ncryptf::rocket::Json<TestStruct> {
+    return ncryptf::rocket::Json(data.0);
+}
+```
+
+4. For bootstrapping, the library provides a convenience endpoint for generated bootstrapping keys.
+
+```rust
+/// Define an actual RedisDb instance
+#[derive(Database)]
+#[database("cache")]
+pub struct RedisDb(deadpool_redis::Pool);
+
+/// Use the provided macro to generate the route.
+ek_route!(RedisDb);
+
+/// Attach the dynamic macro route to your request.
+let rocket = rocket::custom(config)
+      .attach(RedisDb::init())
+      .mount("/ncryptf", routes![ncryptf_ek_route]);
+```
+
+### Authentication, and Request Verification
+
+Ncryptf also provides functionality for validating a request. The `tests/rocketts` folder contains many examples specific to Rocket, though the approach can be used in any implementation. Ncryptf's request authorization is similar to AWS Signature V2 Authentication in that it:
+
+1. Signs the unencrypted request body for verification server side to ensure the request has not been tampered.
+2. Prevents replay attacks.
+3. Timeboxes requests to the signed request datetime.
+
+Clients should implement the following to make authorized requests.
+
+1. Generate a token from data provide by an IKM endpoint:
+```rust
+let token =  ncryptf::Token::from(
+        "x2gMeJ5Np0CcKpZav+i9iiXeQBtaYMQ/yeEtcOgY3J".to_string(),
+        "LRSEe5zHb1aq20Hr9te2sQF8sLReSkO8bS1eD/9LDM8".to_string(),
+        base64::decode("f2mTaH9vkZZQyF7SxVeXDlOSDbVwjUzhdXv2T/YYO8k=").unwrap().to_vec(),
+        base64::decode("7v/CdiGoEI7bcj7R2EyDPH5nrCd2+7rHYNACB+Kf2FMx405und2KenGjNpCBPv0jOiptfHJHiY3lldAQTGCdqw==").unwrap().to_vec(),
+        now + 14400
+    ).unwrap();
+```
+
+2. Create an authorization object for your request.
+```rust
+ let auth = match ncryptf::Authorization::from(
+        "POST".to_string(), /// this must be uppercase
+        "/auth_echo".to_string(),
+        token,
+        Utc::now(),
+        json.clone().to_string(),
+        None,
+        Some(2)
+    ) {
+        Ok(auth) => auth,
+        Err(_) => {
+            assert!(false);
+            panic!("unable to generate auth header")
+        }
+    };
+```
+
+3. Generate the header and add it to your request.
+```rust
+let client = reqwest::Client::new();
+let res = client
+    .post("https://www.ncryptf.com/example")
+    .header("Authorization:", auth.get_header())
+    .send()
+    .await?;
+```
+
+#### Rocket Request Guard
+
+This library additional provides functionality to handle authentication requests fo you, including parsing, and verification with Rocket.rs. Implementation of this can be done as follows.
+
+1. Attach `ncryptf::rocket::Fairing` to your Rocket<Build>
+```rust
+use ncryptf::rocket::Fairing as NcryptfFairing;
+let rocket = rocket::custom(config)
+        .attach(NcryptfFairing)
+```
+
+2. Have your user entity impplement the `ncryptf::rocket::AuthorizationTrait` async_trait.
+3. At the end of your User entity implementation, run the following macro to bind the FromRequest Trait.
+```rust
+ncryptf::auth!(User);
+```
+
+4. Your request can now retrieve the User entity as part of a Rocket request guard.
+```rust
+#[post("/auth_echo", data="<data>")]
+fn auth_echo( _user: User){
+    dbg!(_user);
+}
+```
+
+You can use this in conjunction with request and response formatting and parsing.
+
+##### Important Notes
+
+This library is doing some _weird_ things to get around several Rocket implementations to appropriately read and parse the request headers and body. As a result, the authorization headers are _only_ parsed and handled if the Content-Type on the request is set to _either_ `application/json` or `application/vnd.ncryptf+json`. Responses are handled via the Accept header, and for both of the aforementioned content types, you must have your Rocket route return an `ncryptf::rocket::Json<T>`, which can appropriately handle both content types.
+
+Furthermore, the ncryptf::rocket::Fairing consumes the DataStream, up to your default JSON limits. If your requests begin to exceed the 8M limit you must extend your limit to capture the full stream as all requests will return a 401 or 403 otherwise.
+
+This library imposes the use of Redis due to the lack of generic caching implementations (like [PSR-6](https://www.php-fig.org/psr/psr-6/)) for Rust. As a result you _must_ provide a functional Redis instance.
+
 ### V2 Encrypted Payload
 
 Verison 2 works identical to the version 1 payload, with the exception that all components needed to decrypt the message are bundled within the payload itself, rather than broken out into separate headers. This alleviates developer concerns with needing to manage multiple headers.

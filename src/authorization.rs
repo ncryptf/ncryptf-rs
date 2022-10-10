@@ -17,7 +17,25 @@ use hmac::{Hmac, Mac};
 
 const AUTH_INFO: &str = "HMAC|AuthenticationKey";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Deserialize)]
+struct AuthParamsJson {
+    pub access_token: String,
+    pub hmac: String,
+    pub salt: String,
+    pub date: String
+}
+
+#[derive(Debug)]
+pub struct AuthParams {
+    pub access_token: String,
+    pub hmac: Vec<u8>,
+    pub salt: Vec<u8>,
+    pub version: Option<i8>,
+    pub date: Option<DateTime<Utc>>
+}
+
+
+#[derive(Debug)]
 pub struct Authorization {
     pub token: Token,
     pub salt: Vec<u8>,
@@ -64,12 +82,13 @@ impl Authorization {
         hmac.update(signature.as_bytes());
         let result = hmac.finalize();
         let bytes = result.into_bytes();
+        let hmac = bytes.to_vec();
         return Ok(Authorization {
             token,
             salt: s.clone(),
             date,
             signature,
-            hmac: bytes.to_vec(),
+            hmac: hmac,
             version
         });
     }
@@ -107,14 +126,14 @@ impl Authorization {
     }
 
     /// Returns the time drift between the current time and the provided time
-    pub fn get_time_drift(date: DateTime<Utc>) -> u32 {
+    pub fn get_time_drift(date: DateTime<Utc>) -> i32 {
         let now = Utc::now();
-        return now.second().abs_diff(date.second());
+        return now.second().abs_diff(date.second()).try_into().unwrap();
     }
 
     /// Verifies whether or not a given HMAC is equal to the one on record
     /// This comparison occurs in constant time to avoid timing attack
-    pub fn verify(&self, hmac: Vec<u8>, drift_allowance: u32) -> bool {
+    pub fn verify(&self, hmac: Vec<u8>, drift_allowance: i32) -> bool {
         let drift = Self::get_time_drift(self.get_date());
         if drift >= drift_allowance {
             return false;
@@ -151,6 +170,50 @@ impl Authorization {
             }
         };
     }
+
+    /// Extracts the parameters from the header string
+    pub fn extract_params_from_header_string(header: String) -> Result<AuthParams, Error> {
+        if header.starts_with("HMAC ") {
+            let auth_header = header.replace("HMAC ", "");
+            if auth_header.contains(",") {
+                let mut params: Vec<String> = auth_header.split(",").map(|s| s.to_string()).collect();
+                if params.len() != 3 {
+                    return Err(Error::InvalidArgument(String::from("Header parameters are not valid.")));
+                }
+
+                return Ok(
+                    AuthParams {
+                        access_token: params.pop().unwrap(),
+                        hmac: base64::decode(params.pop().unwrap()).unwrap(),
+                        salt: base64::decode(params.pop().unwrap()).unwrap(),
+                        version: Some(1),
+                        date: None
+                    }
+                );
+            } else {
+                let json = base64::decode(auth_header).unwrap();
+                match serde_json::from_str::<AuthParamsJson>(String::from_utf8(json).unwrap().as_str()) {
+                    Ok(params) => {
+                        let date = chrono::DateTime::parse_from_rfc2822(&params.date);
+                        if date.is_ok() {
+                            let d = date.unwrap().with_timezone(&Utc);
+                            return Ok(AuthParams {
+                                access_token: params.access_token,
+                                hmac: base64::decode(params.hmac).unwrap(),
+                                salt: base64::decode(params.salt).unwrap(),
+                                version: Some(2),
+                                date: Some(d)
+                            });
+                        }
+                    },
+                    _ => {}
+                };
+            }
+        }
+
+        return Err(Error::InvalidArgument(String::from("Header parameters are not valid.")));
+    }
+
 }
 
 /// Internal structure for JSON serialization
