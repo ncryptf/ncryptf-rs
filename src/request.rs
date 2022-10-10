@@ -16,7 +16,6 @@ use libsodium_sys::{
 use crate::util::randombytes_buf;
 use crate::{error::NcryptfError as Error, VERSION_2_HEADER};
 
-#[derive(Debug, Clone)]
 pub struct Request {
     secret_key: Vec<u8>,
     signature_secret_key: Vec<u8>,

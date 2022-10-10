@@ -4,7 +4,7 @@ use crate::Keypair;
 use crate::Signature;
 use rand::{distributions::Alphanumeric, Rng};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ExportableEncryptionKeyData {
     pub public: String,
     pub signature: String,
@@ -12,7 +12,7 @@ pub struct ExportableEncryptionKeyData {
 }
 
 /// Represents an Encryption key used to encrypt and decrypt requests
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct EncryptionKey {
     bkp: Keypair,
     skp: Keypair,

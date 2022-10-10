@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 
-// A error representing
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum TokenError {
     InvalidToken,
     SignatureInvalid,

@@ -25,7 +25,7 @@ struct AuthParamsJson {
     pub date: String
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct AuthParams {
     pub access_token: String,
     pub hmac: Vec<u8>,
@@ -35,7 +35,7 @@ pub struct AuthParams {
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Authorization {
     pub token: Token,
     pub salt: Vec<u8>,
