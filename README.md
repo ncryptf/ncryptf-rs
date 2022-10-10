@@ -8,8 +8,8 @@
   </p>
 </div>
 
-![docs.rs](https://img.shields.io/docsrs/ncryptf-rs?style=for-the-badge)
-![Crates.io (recent)](https://img.shields.io/crates/dr/ncryptf-rs?style=for-the-badge)
+[![docs.rs](https://img.shields.io/docsrs/ncryptf-rs?style=for-the-badge)](https://docs.rs/ncryptf-rs/0.2.3)
+[![Crates.io (recent)](https://img.shields.io/crates/dr/ncryptf-rs?style=for-the-badge)](https://crates.io/crates/ncryptf-rs)
 
 </hr>
 
