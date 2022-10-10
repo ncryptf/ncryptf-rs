@@ -10,6 +10,9 @@
 
 ![docs.rs](https://img.shields.io/docsrs/ncryptf-rs?style=for-the-badge)
 ![Crates.io (recent)](https://img.shields.io/crates/dr/ncryptf-rs?style=for-the-badge)
+
+</hr>
+
 The rust ncryptf bindings are intended to be API similar to other language bindings for ease of readability.
 
 ## Installing
