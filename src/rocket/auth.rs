@@ -4,13 +4,14 @@ use async_trait::async_trait;
 #[derive(Clone, Debug)]
 pub enum TokenError {
     InvalidToken,
+    SignatureInvalid,
     ServerError
 }
 
 #[async_trait]
 pub trait AuthorizationTrait: Sync + Send + 'static {
-    async fn get_token_from_access_token(access_token: String) -> Result<crate::Token, TokenError>;
-    async fn get_user_from_token(token: crate::Token) -> Result<Box<Self>, TokenError>;
+    async fn get_token_from_access_token(access_token: String, cache:  &mut redis::Connection) -> Result<crate::Token, TokenError>;
+    async fn get_user_from_token(token: crate::Token, cache: &mut redis::Connection) -> Result<Box<Self>, TokenError>;
 }
 
 pub mod auth {
@@ -20,8 +21,8 @@ pub mod auth {
             use chrono::{Utc};
             use rocket::{
                 request::{
-                    self, 
-                    Request, 
+                    self,
+                    Request,
                     FromRequest
                 },
                 outcome::Outcome,
@@ -38,7 +39,7 @@ pub mod auth {
 
                     let body = req.local_cache(|| return "".to_string());
 
-                    let cache = match ncryptf::rocket::get_cache(req) {
+                    let mut cache = match ncryptf::rocket::get_cache(req) {
                         Ok(cache) => cache,
                         Err(_error) => return Outcome::Failure((rocket::http::Status::InternalServerError, TokenError::ServerError))
                     };
@@ -54,25 +55,63 @@ pub mod auth {
                         Err(_) => return Outcome::Failure((rocket::http::Status::Unauthorized, TokenError::InvalidToken))
                     };
 
-                    match <$T>::get_token_from_access_token(params.access_token).await {
+                    match <$T>::get_token_from_access_token(params.access_token, &mut cache).await {
                         Ok(token) => {
                             // Create a new datetime from the data parameter, or the request header
-                            let date = Utc::now();
+                            let date: chrono::DateTime<Utc> = match params.date {
+                                Some(date) => date,
+                                None => {
+                                    let date: chrono::DateTime<Utc> = match req.headers().get_one("X-Date") {
+                                        Some(h) => {
+                                            let date = chrono::DateTime::parse_from_rfc2822(&h.to_string());
+                                            date.unwrap().with_timezone(&Utc)
+                                        },
+                                        None => return Outcome::Failure((rocket::http::Status::Unauthorized, TokenError::InvalidToken))
+                                    };
+                                    date
+                                }
+                            };
 
+                            let method = req.method().to_string();
+                            let uri = req.uri().to_string();
+                            let data = body.to_owned();
                             match ncryptf::Authorization::from(
-                                req.method().to_string(),
-                                req.uri().to_string(),
+                                method,
+                                uri,
                                 token.clone(),
                                 date,
-                                body.to_owned(),
+                                data,
                                 Some(params.salt),
                                 params.version
                             ) {
                                 Ok(auth) => {
                                     if auth.verify(params.hmac, ncryptf::rocket::NCRYPTF_DRIFT_ALLOWANCE) {
                                         // If the header is ncryptf, then also check the signing public key and do a constant time check
-
-                                        match <$T>::get_user_from_token(token).await {
+                                        match req.headers().get_one("Content-Type") {
+                                            Some(ct) => {
+                                                match ct {
+                                                    ncryptf::rocket::NCRYPTF_CONTENT_TYPE => {
+                                                        let version = req.local_cache(|| ncryptf::rocket::NcryptfRequestVersion(2));
+                                                        if !body.eq("") && version.0 >= 2 {
+                                                            let raw_body_s = req.local_cache(|| ncryptf::rocket::NcryptfRawBody("".to_string()));
+                                                            let raw_body = &raw_body_s.0;
+                                                            match ncryptf::Response::get_signing_public_key_from_response(base64::decode(raw_body).unwrap()) {
+                                                                Ok(public_key) => {
+                                                                    let signature_pk = token.get_signature_public_key().unwrap();
+                                                                    if !constant_time_eq::constant_time_eq(&public_key, &signature_pk) {
+                                                                        return Outcome::Failure((rocket::http::Status::Unauthorized, TokenError::SignatureInvalid));
+                                                                    }
+                                                                },
+                                                                Err(_) => return Outcome::Failure((rocket::http::Status::Unauthorized, TokenError::SignatureInvalid))
+                                                            }
+                                                        }
+                                                    },
+                                                    _ => {}
+                                                }
+                                            },
+                                            None => {}
+                                        };
+                                        match <$T>::get_user_from_token(token, &mut cache).await {
                                             Ok(user) => return Outcome::Success(*user),
                                             Err(_) => return Outcome::Failure((rocket::http::Status::Unauthorized, TokenError::InvalidToken))
                                         };

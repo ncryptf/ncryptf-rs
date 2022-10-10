@@ -2,7 +2,7 @@ use crate::rocket::json::Error as Error;
 use std::io;
 
 pub const NCRYPTF_CONTENT_TYPE: &str = "application/vnd.ncryptf+json";
-pub const NCRYPTF_DRIFT_ALLOWANCE: u32 = 90;
+pub const NCRYPTF_DRIFT_ALLOWANCE: i32 = 90;
 
 #[derive(Debug, Clone)]
 pub struct RequestPublicKey(pub Vec<u8>);
@@ -21,6 +21,9 @@ pub use auth::RocketAuth;
 pub use auth::TokenError;
 mod fairing;
 pub use fairing::Fairing;
+pub use fairing::FairingConsumed;
+pub use fairing::NcryptfRequestVersion;
+pub use fairing::NcryptfRawBody;
 use rocket::Request;
 mod auth;
 

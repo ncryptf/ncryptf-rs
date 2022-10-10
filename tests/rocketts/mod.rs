@@ -1,5 +1,3 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use ncryptf::{ek_route, rocket::ExportableEncryptionKeyData};
 use rocket::{local::blocking::Client, http::Header};
 use serde::Deserialize;
@@ -19,11 +17,8 @@ pub struct User {
 #[async_trait]
 impl ncryptf::rocket::AuthorizationTrait for User {
     /// Our static implementation returns a static token
-    async fn get_token_from_access_token(access_token: String) -> Result<ncryptf::Token, ncryptf::rocket::TokenError> {
-        let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+    async fn get_token_from_access_token(_access_token: String, _cache: &mut redis::Connection) -> Result<ncryptf::Token, ncryptf::rocket::TokenError> {
+        let now = Utc::now().timestamp();
 
         let token =  ncryptf::Token::from(
             "x2gMeJ5Np0CcKpZav+i9iiXeQBtaYMQ/yeEtcOgY3J".to_string(),
@@ -37,7 +32,7 @@ impl ncryptf::rocket::AuthorizationTrait for User {
     }
 
     /// Returns a static user from an authorization token
-    async fn get_user_from_token(token: ncryptf::Token) -> Result<Box<Self>, ncryptf::rocket::TokenError> {
+    async fn get_user_from_token(_token: ncryptf::Token, _cache: &mut redis::Connection) -> Result<Box<Self>, ncryptf::rocket::TokenError> {
         return Ok(Box::new(User { id: 1 }));
     }
 }
@@ -64,13 +59,13 @@ fn echo(
 #[post("/auth_echo", data="<data>")]
 fn auth_echo(
     data: ncryptf::rocket::Json<TestStruct>,
-    user: User,
+    _user: User, // Satisfying the reqest guard is sufficient to verify the request can be parsed
 ) -> ncryptf::rocket::Json<TestStruct> {
     return ncryptf::rocket::Json(data.0);
 }
 
+/// Setup helper function
 fn setup() -> Client{
-
     let config = rocket::Config::figment()
         .merge(("ident", false))
         .merge(("databases.cache", rocket_db_pools::Config {
@@ -296,8 +291,38 @@ fn test_auth_echo_plain_to_plain() {
     let client = setup();
     let json: serde_json::Value = serde_json::from_str(r#"{ "hello": "world"}"#).unwrap();
 
+    // Always use the current time
+    let now = Utc::now().timestamp();
+
+    // We really only care about the ikm and signature
+    // This information should be extracted from a local cache
+    let token =  ncryptf::Token::from(
+        "x2gMeJ5Np0CcKpZav+i9iiXeQBtaYMQ/yeEtcOgY3J".to_string(),
+        "LRSEe5zHb1aq20Hr9te2sQF8sLReSkO8bS1eD/9LDM8".to_string(),
+        base64::decode("f2mTaH9vkZZQyF7SxVeXDlOSDbVwjUzhdXv2T/YYO8k=").unwrap().to_vec(),
+        base64::decode("7v/CdiGoEI7bcj7R2EyDPH5nrCd2+7rHYNACB+Kf2FMx405und2KenGjNpCBPv0jOiptfHJHiY3lldAQTGCdqw==").unwrap().to_vec(),
+        now + 14400
+    ).unwrap();
+
+    let auth = match ncryptf::Authorization::from(
+        "POST".to_string(),
+        "/auth_echo".to_string(),
+        token,
+        Utc::now(),
+        json.clone().to_string(),
+        None,
+        Some(2)
+    ) {
+        Ok(auth) => auth,
+        Err(_) => {
+            assert!(false);
+            panic!("unable to generate auth header")
+        }
+    };
+
     let response = client.post("/auth_echo")
         .body(json.to_string())
+        .header(Header::new("Authorization", auth.get_header()))
         .header(Header::new("Content-Type", "application/json"))
         .header(Header::new("Accept", "application/json"))
         .dispatch();
@@ -306,4 +331,80 @@ fn test_auth_echo_plain_to_plain() {
     assert_eq!(response.status().code, 200);
     let body = response.into_string().unwrap();
     assert_eq!(body, json.to_string());
+}
+
+/// Tests an authenticated echo request with a signature and auth header.
+#[test]
+fn test_auth_echo_encrypted_to_plain() {
+    let client = setup();
+
+    let ek = get_ek();
+    let json: serde_json::Value = serde_json::from_str(r#"{ "hello": "world"}"#).unwrap();
+
+    let kp = ncryptf::Keypair::new();
+
+    // Always use the current time
+    let now = Utc::now().timestamp();
+
+    // We really only care about the ikm and signature
+    // This information should be extracted from a local cache
+    let token =  ncryptf::Token::from(
+        "x2gMeJ5Np0CcKpZav+i9iiXeQBtaYMQ/yeEtcOgY3J".to_string(),
+        "LRSEe5zHb1aq20Hr9te2sQF8sLReSkO8bS1eD/9LDM8".to_string(),
+        base64::decode("f2mTaH9vkZZQyF7SxVeXDlOSDbVwjUzhdXv2T/YYO8k=").unwrap().to_vec(),
+        base64::decode("7v/CdiGoEI7bcj7R2EyDPH5nrCd2+7rHYNACB+Kf2FMx405und2KenGjNpCBPv0jOiptfHJHiY3lldAQTGCdqw==").unwrap().to_vec(),
+        now + 14400
+    ).unwrap();
+
+    let req = ncryptf::Request::from(
+        kp.get_secret_key(),
+        token.signature.clone()
+    );
+
+    let req_body = req.unwrap().encrypt(
+        json.to_string(),
+        ek.get_box_kp().get_public_key()
+    ).unwrap();
+    let astr = base64::encode(req_body.clone());
+
+    let vr = ncryptf::Response::get_version(req_body.clone());
+    assert_eq!(vr.unwrap(), 2);
+
+    let auth = match ncryptf::Authorization::from(
+        "POST".to_string(),
+        "/auth_echo".to_string(),
+        token,
+        Utc::now(),
+        json.clone().to_string(),
+        None,
+        Some(2)
+    ) {
+        Ok(auth) => auth,
+        Err(_) => {
+            assert!(false);
+            panic!("unable to generate auth header")
+        }
+    };
+
+    let response = client.post("/auth_echo")
+        .body(astr)
+        .header(Header::new("Authorization", auth.get_header()))
+        .header(Header::new("Content-Type", "application/vnd.ncryptf+json"))
+        .header(Header::new("Accept", "application/vnd.ncryptf+json"))
+        .header(Header::new("X-HashId", ek.get_hash_id()))
+        .dispatch();
+
+    // We should get an HTTP 200 back
+    assert_eq!(response.status().code, 200);
+    let body = response.into_string().unwrap();
+    let bbody = base64::decode(body.clone()).unwrap();
+    let r = ncryptf::Response::from(kp.get_secret_key()).unwrap();
+
+    let message = r.decrypt(
+        bbody,
+        None,
+        None
+    );
+    assert!(message.is_ok());
+    assert_eq!(message.unwrap(), json.to_string());
 }

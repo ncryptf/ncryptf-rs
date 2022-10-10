@@ -17,7 +17,15 @@ use hmac::{Hmac, Mac};
 
 const AUTH_INFO: &str = "HMAC|AuthenticationKey";
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
+struct AuthParamsJson {
+    pub access_token: String,
+    pub hmac: String,
+    pub salt: String,
+    pub date: String
+}
+
+#[derive(Debug, Clone)]
 pub struct AuthParams {
     pub access_token: String,
     pub hmac: Vec<u8>,
@@ -25,6 +33,7 @@ pub struct AuthParams {
     pub version: Option<i8>,
     pub date: Option<DateTime<Utc>>
 }
+
 
 #[derive(Debug, Clone)]
 pub struct Authorization {
@@ -73,12 +82,13 @@ impl Authorization {
         hmac.update(signature.as_bytes());
         let result = hmac.finalize();
         let bytes = result.into_bytes();
+        let hmac = bytes.to_vec();
         return Ok(Authorization {
             token,
             salt: s.clone(),
             date,
             signature,
-            hmac: bytes.to_vec(),
+            hmac: hmac,
             version
         });
     }
@@ -116,14 +126,14 @@ impl Authorization {
     }
 
     /// Returns the time drift between the current time and the provided time
-    pub fn get_time_drift(date: DateTime<Utc>) -> u32 {
+    pub fn get_time_drift(date: DateTime<Utc>) -> i32 {
         let now = Utc::now();
-        return now.second().abs_diff(date.second());
+        return now.second().abs_diff(date.second()).try_into().unwrap();
     }
 
     /// Verifies whether or not a given HMAC is equal to the one on record
     /// This comparison occurs in constant time to avoid timing attack
-    pub fn verify(&self, hmac: Vec<u8>, drift_allowance: u32) -> bool {
+    pub fn verify(&self, hmac: Vec<u8>, drift_allowance: i32) -> bool {
         let drift = Self::get_time_drift(self.get_date());
         if drift >= drift_allowance {
             return false;
@@ -160,7 +170,7 @@ impl Authorization {
             }
         };
     }
-    
+
     /// Extracts the parameters from the header string
     pub fn extract_params_from_header_string(header: String) -> Result<AuthParams, Error> {
         if header.starts_with("HMAC ") {
@@ -179,13 +189,22 @@ impl Authorization {
                         version: Some(1),
                         date: None
                     }
-                );                
+                );
             } else {
                 let json = base64::decode(auth_header).unwrap();
-                match serde_json::from_str::<serde_json::Value>(String::from_utf8(json).unwrap().as_str()) {
+                match serde_json::from_str::<AuthParamsJson>(String::from_utf8(json).unwrap().as_str()) {
                     Ok(params) => {
-                        // todo!() need to deserialize all of the values and populate the struct for return
-                        let access_token = params.get("access_token").unwrap().as_str().unwrap().to_string();
+                        let date = chrono::DateTime::parse_from_rfc2822(&params.date);
+                        if date.is_ok() {
+                            let d = date.unwrap().with_timezone(&Utc);
+                            return Ok(AuthParams {
+                                access_token: params.access_token,
+                                hmac: base64::decode(params.hmac).unwrap(),
+                                salt: base64::decode(params.salt).unwrap(),
+                                version: Some(2),
+                                date: Some(d)
+                            });
+                        }
                     },
                     _ => {}
                 };

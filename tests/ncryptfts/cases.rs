@@ -1,4 +1,3 @@
-use std::time::{SystemTime, UNIX_EPOCH};
 use base64;
 use chrono::Utc;
 use chrono::TimeZone;
@@ -89,10 +88,7 @@ pub fn get_v2_hmac_headers() -> Vec<String> {
 }
 
 pub fn get_token() -> Token {
-    let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+    let now = Utc::now().timestamp();
 
     return Token::from(
         "x2gMeJ5Np0CcKpZav+i9iiXeQBtaYMQ/yeEtcOgY3J".to_string(),
