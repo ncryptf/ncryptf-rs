@@ -16,11 +16,5 @@ pub use signature::Signature;
 pub mod util;
 pub use util::randombytes_buf;
 
-/*
-#[cfg(feature = "reqwest")]
-mod reqwest;
-#[cfg(feature = "reqwest")]
-pub use reqwest::*;
-*/
 #[cfg(feature = "rocket")]
 pub mod rocket;
