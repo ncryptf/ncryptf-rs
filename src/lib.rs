@@ -1,4 +1,6 @@
+/// Ncryptf version 2 magic header
 const VERSION_2_HEADER: &str = "DE259002";
+
 mod token;
 pub use token::Token;
 mod keypair;

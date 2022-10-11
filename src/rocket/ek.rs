@@ -4,6 +4,9 @@ use crate::Keypair;
 use crate::Signature;
 use rand::{distributions::Alphanumeric, Rng};
 
+/// Reusable encryption key data for client parsing
+/// 
+/// This is exported for use in your application for deserializing the request.
 #[derive(Serialize, Deserialize)]
 pub struct ExportableEncryptionKeyData {
     pub public: String,
@@ -71,51 +74,51 @@ impl EncryptionKey {
     }
 }
 
-///! EkRoute provides a generic route which you can use to generate ephemeral (single use) encryption keys to bootstrap your request/response cycle within your application.
-///!
-///! Setup:
-///!     1. Ncryptf utilizes Redis as a shared backend cache. You must have a functional Redis server available to utilize this functionality.
-///!     2. Create a rocket_db_pool for Redis with the `cache` Database name.
-///!
-///!         ```rust
-///!         use rocket_db_pools::{Database, deadpool_redis};
-///!
-///!         #[derive(Database)]
-///!         #[database("cache")]
-///!         pub struct RedisDb(deadpool_redis::Pool);
-///!         ```
-///!
-///!     3. Add a Redis DB Pool figment to your Rocket build configuration:
-///!
-///!         ```rust
-///!         let config = rocket::Config::figment()
-///!             [... other configurations here...]
-///!             .merge(("databases.cache", rocket_db_pools::Config {
-///!                 url: format!("redis://127.0.0.1:6379/"),
-///!                 min_connections: None,
-///!                 max_connections: 1024,
-///!                 connect_timeout: 3,
-///!                 idle_timeout: None,
-///!             }));
-///!         ```
-///!
-///!     4. Attach the figment to your rocket instance:
-///!
-///!         ```rust
-///!         let rocket = rocket::custom(config).attach(RedisDb::init());
-///!         ```
-///!
-///!     5. Call the setup macro to instantiate the route:
-///!
-///!     ```rust
-///!     ncryptf::ek_route!(RedisDb);
-///!     ```
-///!
-///!     6. Mount the route `ncryptf_ek_route` exposed by the macro. The following mount will make the route available at`/ncryptf/ek`
-///!
-///!     ```rust
-///!     rocket .mount("/ncryptf", routes![ncryptf_ek_route]);
-///!     ```
+/// EkRoute provides a generic route which you can use to generate ephemeral (single use) encryption keys to bootstrap your request/response cycle within your application.
+///
+/// ### Setup
+///  1. Ncryptf utilizes Redis as a shared backend cache. You must have a functional Redis server available to utilize this functionality.
+///  2. Create a rocket_db_pool for Redis with the `cache` Database name.
+///
+///      ```rust
+///      use rocket_db_pools::{Database, deadpool_redis};
+///
+///      #[derive(Database)]
+///      #[database("cache")]
+///      pub struct RedisDb(deadpool_redis::Pool);
+///      ```
+///
+///  3. Add a Redis DB Pool figment to your Rocket build configuration:
+///
+///      ```rust
+///      let config = rocket::Config::figment()
+///          [... other configurations here...]
+///          .merge(("databases.cache", rocket_db_pools::Config {
+///              url: format!("redis://127.0.0.1:6379/"),
+///              min_connections: None,
+///              max_connections: 1024,
+///              connect_timeout: 3,
+///              idle_timeout: None,
+///          }));
+///      ```
+///
+///  4. Attach the figment to your rocket instance:
+///
+///      ```rust
+///      let rocket = rocket::custom(config).attach(RedisDb::init());
+///      ```
+///
+///  5. Call the setup macro to instantiate the route:
+///
+///  ```rust
+///  ncryptf::ek_route!(RedisDb);
+///  ```
+///
+///  6. Mount the route `ncryptf_ek_route` exposed by the macro. The following mount will make the route available at`/ncryptf/ek`
+///
+///  ```rust
+///  rocket .mount("/ncryptf", routes![ncryptf_ek_route]);
+///  ```
 pub mod route {
     #[macro_export]
     macro_rules! ek_route {

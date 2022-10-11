@@ -49,52 +49,52 @@ impl<'a> error::Error for Error<'a> {
     }
 }
 
-///! ncryptf::rocket::Json represents a application/vnd.ncryptf+json, JSON string
-///! The JSON struct supports both serialization and de-serialization to reduce implementation time within your application
-///!
-///! Usage:
-///!    Encryption keys and identifiers are stored in Redis. Make sure you have a `rocket_db_pool::Config` setup
-///!    for Redis, and added to your rocket figment()
-///!    You do not have to setup a RequestGuard for Redis, this just uses the same configuration
-///!    ```rust
-///!    .merge(("databases.cache", rocket_db_pools::Config {
-///!            url: format!("redis://127.0.0.1:6379/"),
-///!            min_connections: None,
-///!            max_connections: 1024,
-///!            connect_timeout: 3,
-///!            idle_timeout: None,
-///!        }))
-///!    ````
-///!
-///!    Next, create a struct to represent the request data. This struct MUST implement Serialize if you want to return a ncryptf encrypted response
-///!    ```rust
-///!     use rocket::serde::{Serialize, json::Json};
-///!
-///!     [derive(Serialize)]
-///!     #[serde(crate = "rocket::serde")]
-///!     struct TestStruct<'r> {
-///!         pub hello: &'r str
-///!     }
-///!    ```
-///!
-///!   Your request can now be parsed using data tags.
-///!    Responses can be automatically converted into an JSON encrypted ncryptf response by returning `ncryptf::rocket::Json<T>`
-///!
-///!     If your header is application/vnd.ncryptf+json, returning a ncryptf::rocket::Json<T> will return an encrypted response
-///!     If the header is an application/json (or anything else), ncryptf::rocket::Json<T> will return a rocket::serde::json::Json<T> equivalent JSON response in plain text
-///!
-///!    ```rust
-///!        #[post("/echo", data="<data>")]
-///!        fn echo(data: ncryptf::rocket::Json<TestStruct>) -> ncryptf::rocket::Json<TestStruct> {
-///!            // data.0 is your TestStruct
-///!            //
-///!            return ncryptf::rocket::Json(data.0);
-///!        }
-///!    ```
+/// ncryptf::rocket::Json represents a application/vnd.ncryptf+json, JSON string
+/// The JSON struct supports both serialization and de-serialization to reduce implementation time within your application
+///
+/// ### Usage
+/// Encryption keys and identifiers are stored in Redis. Make sure you have a `rocket_db_pool::Config` setup
+/// for Redis, and added to your rocket figment()
+/// You do not have to setup a RequestGuard for Redis, this just uses the same configuration
+/// ```rust
+/// .merge(("databases.cache", rocket_db_pools::Config {
+///         url: format!("redis://127.0.0.1:6379/"),
+///         min_connections: None,
+///         max_connections: 1024,
+///         connect_timeout: 3,
+///         idle_timeout: None,
+///     }))
+/// ````
+///
+/// Next, create a struct to represent the request data. This struct MUST implement Serialize if you want to return a ncryptf encrypted response
+/// ```rust
+///  use rocket::serde::{Serialize, json::Json};
+///
+///  [derive(Serialize)]
+///  #[serde(crate = "rocket::serde")]
+///  struct TestStruct<'r> {
+///      pub hello: &'r str
+///  }
+/// ```
+///
+/// our request can now be parsed using data tags.
+/// Responses can be automatically converted into an JSON encrypted ncryptf response by returning `ncryptf::rocket::Json<T>`
+///
+///  If your header is application/vnd.ncryptf+json, returning a ncryptf::rocket::Json<T> will return an encrypted response
+///  If the header is an application/json (or anything else), ncryptf::rocket::Json<T> will return a rocket::serde::json::Json<T> equivalent JSON response in plain text
+///
+/// ```rust
+///     #[post("/echo", data="<data>")]
+///     fn echo(data: ncryptf::rocket::Json<TestStruct>) -> ncryptf::rocket::Json<TestStruct> {
+///         // data.0 is your TestStruct
+///         //
+///         return ncryptf::rocket::Json(data.0);
+///     }
+/// ```
 ///
 ///
-///! `ncryptf::rocket::Json<T>` supercedes rocket::serde::json::Json<T> for both encrypted messages, and regular JSON. If you intend to use
-///!  the `Authorization` trait to authenticate users, you MUST receive and return this for your data type
+/// nryptf::rocket::Json<T>` supercedes rocket::serde::json::Json<T> for both encrypted messages, and regular JSON. If you intend to use
+///  the `Authorization` trait to authenticate users, you MUST receive and return this for your data type
 #[derive(Debug, Clone)]
 pub struct Json<T>(pub T);
 
@@ -289,9 +289,9 @@ impl<'r, T: Deserialize<'r>> FromData<'r> for Json<T> {
     }
 }
 
-///! Allows for ncryptf::rocket::Json to be emitted as a responder to reduce code overhead
-///! This responder will handle encrypting the underlying request data correctly for all supported
-///! ncryptf versionn
+/// Allows for ncryptf::rocket::Json to be emitted as a responder to reduce code overhead
+/// This responder will handle encrypting the underlying request data correctly for all supported
+/// ncryptf versionn
 impl<'r, T: Serialize> Responder<'r, 'static> for Json<T> {
     fn respond_to(self, req: &'r Request<'_>) -> response::Result<'static> {
          // Handle serialization

@@ -6,12 +6,16 @@ use rocket::{
     }
 };
 
+/// Indicates in request.local_cache if the fairing consumed the DataStream or not
 pub struct FairingConsumed(pub bool);
 
+/// Cache Ncryptf Version of the reuqest
 pub struct NcryptfRequestVersion(pub i32);
 
+/// Cached Ncryptf raw body
 pub struct NcryptfRawBody(pub String);
 
+/// Ncryptf Fairing necessary for implemeting AuthorizationTrait
 pub struct Fairing;
 
 #[rocket::async_trait]

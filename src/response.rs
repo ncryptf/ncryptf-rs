@@ -13,6 +13,7 @@ use libsodium_sys::{
 
 use crate::{error::NcryptfError as Error, VERSION_2_HEADER};
 
+/// Response allows for decrypting of a request
 pub struct Response {
     pub secret_key: Vec<u8>
 }

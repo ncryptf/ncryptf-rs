@@ -16,6 +16,7 @@ use libsodium_sys::{
 use crate::util::randombytes_buf;
 use crate::{error::NcryptfError as Error, VERSION_2_HEADER};
 
+/// A request that emits a encrypted string for submission to the server.
 pub struct Request {
     secret_key: Vec<u8>,
     signature_secret_key: Vec<u8>,

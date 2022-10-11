@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 
+/// An enum of the various authentication errors that may occur - generalized
 #[derive(Debug)]
 pub enum TokenError {
     InvalidToken,
@@ -21,39 +22,32 @@ pub trait AuthorizationTrait: Sync + Send + 'static {
     async fn get_user_from_token(token: crate::Token, cache: &mut redis::Connection) -> Result<Box<Self>, TokenError>;
 }
 
-///! The ncryptf::auth!() macro provides the appropriate generic implementation details of FromRequest to allow User entities to be returned
-///! as a Rocket request guard (FromRequest). The core features of ncryptf authorization verification are implemented through this macro.
-///! If you wish to utilize ncryptf's authorization features you must perform the following.
-///!
-///! Usage:
-///!     1. Attach the ncryptf::Fairing to your Rocket configuration:
-///!
-///!     ```rust
-///!     let rocket = rocket::custom(config)
-///!         .attach(NcryptfFairing);
-///!     ```
-///!
-///!     2. Define your User entity, and have to implement AuthorizationTrait.
-///!
-///!     3. At the end of your User entity struct file, bind the macro FromRequest to your User entity.
-///!
-///!     ```rust
-///!     ncryptf::auth!(User);
-///!     ```
-///!
-///!     4. Your User is now available as part of the request guard:
-///!     ```
-///!     #[post("/auth_info", data="<data>")]
-///!     fn auth_echo(_user: User){
-///!         dbg!(_user);
-///!     }
-///!     ```
-///!
-///!     **NOTE**: The Authorization Features of ncryptf are exclusively available if and only if you set the appropriate Content-Type to either application/json, or application/vnd.ncryptf+json, _even for GET requests_,
-///!     and other requests that don't have a body. The FromRequest functionality is only available for these content types.
-///!
-///!     Additionally, ncryptf::rocket::Json will handle all JSON + Ncryptf+JSON content types when this is in use. ncryptf::rocket::Json is mostly compatible with rocket::serde::Json, but shares the same limitations, features,
-///!     and particularities.
+/// The ncryptf::auth!() macro provides the appropriate generic implementation details of FromRequest to allow User entities to be returned
+/// as a Rocket request guard (FromRequest). The core features of ncryptf authorization verification are implemented through this macro.
+/// If you wish to utilize ncryptf's authorization features you must perform the following.
+///
+/// ### Usage
+/// 1. Attach the ncryptf::Fairing to your Rocket configuration:
+///  ```rust
+///  let rocket = rocket::custom(config)
+///      .attach(NcryptfFairing);
+///  ```
+///  2. Define your User entity, and have to implement AuthorizationTrait.
+///  3. At the end of your User entity struct file, bind the macro FromRequest to your User entity.
+///  ```rust
+///  ncryptf::auth!(User);
+///  ```
+///  4. Your User is now available as part of the request guard:
+///  ```
+///  #[post("/auth_info", data="<data>")]
+///  fn auth_echo(_user: User){
+///      dbg!(_user);
+///  }
+///  ```
+///  **NOTE**: The Authorization Features of ncryptf are exclusively available if and only if you set the appropriate Content-Type to either application/json, or application/vnd.ncryptf+json, _even for GET requests_,
+///  and other requests that don't have a body. The FromRequest functionality is only available for these content types.
+///  Additionally, ncryptf::rocket::Json will handle all JSON + Ncryptf+JSON content types when this is in use. ncryptf::rocket::Json is mostly compatible with rocket::serde::Json, but shares the same limitations, features,
+///  and particularities.
 pub mod auth {
     #[macro_export]
     macro_rules! auth {

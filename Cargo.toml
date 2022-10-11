@@ -5,7 +5,7 @@ description = "Secure API authentication and end to end encryption."
 repository = "https://github.com/ncryptf/ncryptf-rs"
 license = "BSD-3-Clause"
 categories = ["cryptography", "authentication", "api-bindings"]
-version = "0.2.4"
+version = "0.2.5"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -42,3 +42,11 @@ reqwest = ["dep:reqwest"]
 rocket = { version = "0.5.0-rc.2"  }
 reqwest = { version = "^0.11", features = ["json", "blocking"] }
 rocket_db_pools = { version = "0.1.0-rc.2", features = ["deadpool_redis"]}
+
+[badges]
+github = { repository = "https://github.com/ncryptf/ncryptf-rs" }
+
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]

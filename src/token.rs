@@ -7,6 +7,7 @@ use libsodium_sys::{
 use crate::error::NcryptfError as Error;
 use serde::{Serialize, Deserialize};
 
+/// Authorization token data to be either stored locally, or server side in a cache.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Token {
     pub access_token: String,

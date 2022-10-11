@@ -13,6 +13,7 @@ use libsodium_sys::{
 
 use crate::Keypair;
 
+/// Represents a signature and provides utility methods for validating signatures on a request.
 pub struct Signature;
 
 impl Signature {

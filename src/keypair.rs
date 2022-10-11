@@ -6,6 +6,8 @@ use libsodium_sys::{
     crypto_box_PUBLICKEYBYTES as CRYPTO_BOX_PUBLICKEYBYTES,
     crypto_box_SECRETKEYBYTES as CRYPTO_BOX_SECRETKEYBYTES
 };
+
+/// Represents a generic keypair
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Keypair {
     pub secret_key: Vec<u8>,
@@ -13,7 +15,7 @@ pub struct Keypair {
 }
 
 impl Keypair {
-    /// Generates a new keypair
+    /// Generates a new keypair for encryption
     pub fn new() -> Self {
         let mut sk: [u8; CRYPTO_BOX_SECRETKEYBYTES as usize] = vec![0; CRYPTO_BOX_SECRETKEYBYTES as usize].try_into().unwrap();
         let mut pk: [u8; CRYPTO_BOX_PUBLICKEYBYTES as usize] = vec![0; CRYPTO_BOX_PUBLICKEYBYTES as usize].try_into().unwrap();

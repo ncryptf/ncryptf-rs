@@ -15,8 +15,10 @@ use sha2::Sha256;
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
 
+/// HMAC Auth Info header
 const AUTH_INFO: &str = "HMAC|AuthenticationKey";
 
+/// Internal deserialization helper struct
 #[derive(Debug, Deserialize)]
 struct AuthParamsJson {
     pub access_token: String,
@@ -25,6 +27,7 @@ struct AuthParamsJson {
     pub date: String
 }
 
+/// Parameters as extracted from the request header
 #[derive(Debug)]
 pub struct AuthParams {
     pub access_token: String,
@@ -34,7 +37,7 @@ pub struct AuthParams {
     pub date: Option<DateTime<Utc>>
 }
 
-
+/// Generates, validates, and parses Authorization header information
 #[derive(Debug)]
 pub struct Authorization {
     pub token: Token,

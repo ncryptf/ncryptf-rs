@@ -1,13 +1,16 @@
 use crate::rocket::json::Error as Error;
 use std::io;
 
+/// The Ncryptf JSON content type
 pub const NCRYPTF_CONTENT_TYPE: &str = "application/vnd.ncryptf+json";
+
+/// The amount of time (in either direction) a request time may differ by and still be accepted.
 pub const NCRYPTF_DRIFT_ALLOWANCE: i32 = 90;
 
-#[derive(Debug, Clone)]
+/// The cached public key from the request
 pub struct RequestPublicKey(pub Vec<u8>);
 
-#[derive(Debug, Clone)]
+/// The cached signing public key from the request
 pub struct RequestSigningPublicKey(pub Vec<u8>);
 
 mod json;
