@@ -1,6 +1,10 @@
+#[doc(hidden)]
 pub use chrono::{Utc, DateTime};
+#[doc(hidden)]
 pub use base64;
+#[doc(hidden)]
 pub use constant_time_eq;
+#[doc(hidden)]
 pub use rocket::{
     async_trait,
     request::{
@@ -10,12 +14,6 @@ pub use rocket::{
         Outcome
     },
     http::Status
-};
-pub use rocket_db_pools::{
-    Pool,
-    deadpool_redis::{
-        Connection
-    }
 };
 
 #[derive(Debug)]

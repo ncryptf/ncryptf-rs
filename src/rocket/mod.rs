@@ -27,7 +27,7 @@ pub use auth::AuthorizationTrait;
 pub use auth::*;
 pub use auth::TokenError;
 
-/// Retrieves the cache
+#[doc(hidden)]
 pub fn get_cache<'r>(req: &'r Request<'_>) -> Result<redis::Connection, Error<'r>> {
     // Retrieve the redis connection string from the figment
     let rdb = match req.rocket().figment().find_value("databases.cache") {
