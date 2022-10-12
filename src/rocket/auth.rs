@@ -1,5 +1,3 @@
-use async_trait::async_trait;
-
 pub extern crate chrono;
 pub extern crate base64;
 pub extern crate rocket as rocketrs;
@@ -15,7 +13,7 @@ pub enum TokenError {
 /// AuthorizationTrait is a trait that should be implemented by your User entity.
 /// This trait, in conjunction with the ncryptf::auth!() macro, enables individual
 /// Users to be returned as part of a Rocket request guard.
-#[async_trait]
+#[async_trait::async_trait]
 pub trait AuthorizationTrait: Sync + Send + 'static {
     /// Returns a ncryptf::Token instance given an access_token. A cache instance is provided to Redis, however you are not obliged to use it
     async fn get_token_from_access_token(access_token: String) -> Result<crate::Token, TokenError>;
@@ -65,11 +63,11 @@ macro_rules! auth {
         use $crate::rocket::TokenError;
         use $crate::rocket::AuthorizationTrait;
 
-        #[rocket::async_trait]
+        #[$crate::rocket::rocketrs::async_trait]
         impl<'r>$crate::rocket::rocketrs::request::FromRequest<'r> for $T {
             type Error = TokenError;
 
-            async fn from_request(req: &'r$crate::rocket::rocketrs::request::Request<'_>) ->$crate::rocket::rocketrs::request::Outcome<Self, Self::Error> {
+            async fn from_request(req: &'r$crate::rocket::rocketrs::request::Request<'_>) ->$crate::rocket::rocketrs::request::Outcome<Self, TokenError> {
 
                 let body = req.local_cache(|| return "".to_string());
 
