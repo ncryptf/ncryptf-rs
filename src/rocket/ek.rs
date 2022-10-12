@@ -116,42 +116,38 @@ impl EncryptionKey {
 ///!     ```rust
 ///!     rocket .mount("/ncryptf", routes![ncryptf_ek_route]);
 ///!     ```
-pub mod route {
-    #[macro_export]
-    macro_rules! ek_route {
-        ($T: ty) => {
-                use rocket::get;
-                use rocket::http::Status;
-                use rocket_db_pools::Database;
-                use rocket_db_pools::Connection as RedisConnection;
-                #[allow(unused_imports)] // for rust-analyzer
-                use rocket_db_pools::deadpool_redis::redis::AsyncCommands;
+#[macro_export]
+macro_rules! ek_route {
+    ($T: ty) => {
+            use rocket::get;
+            use rocket::http::Status;
+            use rocket_db_pools::Database;
+            use rocket_db_pools::Connection as RedisConnection;
+            #[allow(unused_imports)] // for rust-analyzer
+            use rocket_db_pools::deadpool_redis::redis::AsyncCommands;
 
-                use serde::{Deserialize, Serialize};
-                use ncryptf::rocket::{EncryptionKey, ExportableEncryptionKeyData};
+            use serde::{Deserialize, Serialize};
+            use ncryptf::rocket::{EncryptionKey, ExportableEncryptionKeyData};
 
-                #[get("/ek")]
-                pub async fn ncryptf_ek_route( rdb: RedisConnection<$T>) -> Result<ncryptf::rocket::Json<ExportableEncryptionKeyData>, Status> {
-                    let ek = EncryptionKey::new(true);
-                    let mut redis: rocket_db_pools::deadpool_redis::Connection  = rdb.into_inner();
+            #[get("/ek")]
+            pub async fn ncryptf_ek_route( rdb: RedisConnection<$T>) -> Result<ncryptf::rocket::Json<ExportableEncryptionKeyData>, Status> {
+                let ek = EncryptionKey::new(true);
+                let mut redis: rocket_db_pools::deadpool_redis::Connection  = rdb.into_inner();
 
-                    let _result = match redis.set_ex(
-                        ek.get_hash_id(),
-                        serde_json::to_string(&ek).unwrap(),
-                        3600
-                    ).await {
-                        Ok(result) => result,
-                        Err(_) => return Err(Status::InternalServerError)
-                    };
+                let _result = match redis.set_ex(
+                    ek.get_hash_id(),
+                    serde_json::to_string(&ek).unwrap(),
+                    3600
+                ).await {
+                    Ok(result) => result,
+                    Err(_) => return Err(Status::InternalServerError)
+                };
 
-                    return Ok(ncryptf::rocket::Json(ExportableEncryptionKeyData {
-                        public: base64::encode(ek.get_box_kp().get_public_key()),
-                        signature: base64::encode(ek.get_sign_kp().get_public_key()),
-                        hash_id: ek.get_hash_id()
-                    }));
-                }
+                return Ok(ncryptf::rocket::Json(ExportableEncryptionKeyData {
+                    public: base64::encode(ek.get_box_kp().get_public_key()),
+                    signature: base64::encode(ek.get_sign_kp().get_public_key()),
+                    hash_id: ek.get_hash_id()
+                }));
             }
         }
-}
-
-pub use route as EkRoute;
+    }
