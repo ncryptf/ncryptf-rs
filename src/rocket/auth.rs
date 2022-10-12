@@ -11,6 +11,12 @@ pub use rocket::{
     },
     http::Status
 };
+pub use rocket_db_pools::{
+    Pool,
+    deadpool_redis::{
+        Connection
+    }
+};
 
 #[derive(Debug)]
 pub enum TokenError {
@@ -77,13 +83,7 @@ macro_rules! auth {
             type Error = TokenError;
 
             async fn from_request(req: &'r $crate::rocket::request::Request<'_>) ->$crate::rocket::Outcome<Self, TokenError> {
-
                 let body = req.local_cache(|| return "".to_string());
-
-                let mut cache = match ncryptf::rocket::get_cache(req) {
-                    Ok(cache) => cache,
-                    Err(_error) => return$crate::rocket::Outcome::Failure(($crate::rocket::Status::InternalServerError, TokenError::ServerError))
-                };
 
                 // Retrieve the Authorization header
                 let header: String = match req.headers().get_one("Authorization") {
