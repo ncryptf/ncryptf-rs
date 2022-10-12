@@ -132,7 +132,7 @@ macro_rules! ek_route {
             #[get("/ek")]
             pub async fn ncryptf_ek_route( rdb: RedisConnection<$T>) -> Result<ncryptf::rocket::Json<ExportableEncryptionKeyData>, Status> {
                 let ek = EncryptionKey::new(true);
-                let mut redis: rocket_db_pools::deadpool_redis::Connection  = rdb.into_inner();
+                let mut redis: rocket_db_pools::deadpool_redis::Connection = rdb.into_inner();
 
                 let _result = match redis.set_ex(
                     ek.get_hash_id(),

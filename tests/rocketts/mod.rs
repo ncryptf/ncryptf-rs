@@ -17,7 +17,7 @@ pub struct User {
 #[async_trait]
 impl ncryptf::rocket::AuthorizationTrait for User {
     /// Our static implementation returns a static token
-    async fn get_token_from_access_token(_access_token: String) -> Result<ncryptf::Token, ncryptf::rocket::TokenError> {
+    async fn get_token_from_access_token(_access_token: String, _f: rocket_db_pools::figment::Figment) -> Result<ncryptf::Token, ncryptf::rocket::TokenError> {
         let now = chrono::Utc::now().timestamp();
 
         let token =  ncryptf::Token::from(
@@ -32,7 +32,7 @@ impl ncryptf::rocket::AuthorizationTrait for User {
     }
 
     /// Returns a static user from an authorization token
-    async fn get_user_from_token(_token: ncryptf::Token) -> Result<Box<Self>, ncryptf::rocket::TokenError> {
+    async fn get_user_from_token(_token: ncryptf::Token, _f: rocket_db_pools::figment::Figment) -> Result<Box<Self>, ncryptf::rocket::TokenError> {
         return Ok(Box::new(User { id: 1 }));
     }
 }
@@ -69,6 +69,13 @@ fn setup() -> Client{
     let config = rocket::Config::figment()
         .merge(("ident", false))
         .merge(("databases.cache", rocket_db_pools::Config {
+            url: format!("redis://127.0.0.1:6379/"),
+            min_connections: None,
+            max_connections: 1024,
+            connect_timeout: 3,
+            idle_timeout: None,
+        }))
+        .merge(("databases.cache2", rocket_db_pools::Config {
             url: format!("redis://127.0.0.1:6379/"),
             min_connections: None,
             max_connections: 1024,

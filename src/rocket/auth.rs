@@ -15,6 +15,8 @@ pub use rocket::{
     },
     http::Status
 };
+#[doc(hidden)]
+pub use rocket_db_pools::figment::Figment;
 
 #[derive(Debug)]
 pub enum TokenError {
@@ -29,12 +31,12 @@ pub enum TokenError {
 #[async_trait::async_trait]
 pub trait AuthorizationTrait: Sync + Send + 'static {
     /// Returns a ncryptf::Token instance given an access_token. A cache instance is provided to Redis, however you are not obliged to use it
-    async fn get_token_from_access_token(access_token: String) -> Result<crate::Token, TokenError>;
+    async fn get_token_from_access_token(access_token: String, figment: Figment) -> Result<crate::Token, TokenError>;
 
     /// Returns a <Self> (User) entity given a specific token
     /// You can use this method to determine the appropriate access credentials, scoping, and permissions.
     /// An optional connection to Redis is provided, however you are not obliged to use it.
-    async fn get_user_from_token(token: crate::Token,) -> Result<Box<Self>, TokenError>;
+    async fn get_user_from_token(token: crate::Token, figment: Figment) -> Result<Box<Self>, TokenError>;
 }
 
 ///! The ncryptf::auth!() macro provides the appropriate generic implementation details of FromRequest to allow User entities to be returned
@@ -81,6 +83,8 @@ macro_rules! auth {
             type Error = TokenError;
 
             async fn from_request(req: &'r $crate::rocket::request::Request<'_>) ->$crate::rocket::Outcome<Self, TokenError> {
+                let dbs = req.rocket().figment().focus("databases");
+
                 let body = req.local_cache(|| return "".to_string());
 
                 // Retrieve the Authorization header
@@ -94,7 +98,7 @@ macro_rules! auth {
                     Err(_) => return$crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
                 };
 
-                match <$T>::get_token_from_access_token(params.access_token).await {
+                match <$T>::get_token_from_access_token(params.access_token, dbs.clone()).await {
                     Ok(token) => {
                         // Create a new datetime from the data parameter, or the request header
                         let date: $crate::rocket::DateTime<$crate::rocket::Utc> = match params.date {
@@ -150,7 +154,7 @@ macro_rules! auth {
                                         },
                                         None => {}
                                     };
-                                    match <$T>::get_user_from_token(token).await {
+                                    match <$T>::get_user_from_token(token, dbs).await {
                                         Ok(user) => return$crate::rocket::Outcome::Success(*user),
                                         Err(_) => return$crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
                                     };
