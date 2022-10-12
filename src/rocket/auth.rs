@@ -1,7 +1,16 @@
-pub extern crate chrono;
-pub extern crate base64;
-pub extern crate rocket as rocketrs;
-pub extern crate constant_time_eq;
+pub use chrono::{Utc, DateTime};
+pub use base64;
+pub use constant_time_eq;
+pub use rocket::{
+    async_trait,
+    request::{
+        self,
+        Request,
+        FromRequest,
+        Outcome
+    },
+    http::Status
+};
 
 #[derive(Debug)]
 pub enum TokenError {
@@ -63,42 +72,42 @@ macro_rules! auth {
         use $crate::rocket::TokenError;
         use $crate::rocket::AuthorizationTrait;
 
-        #[$crate::rocket::rocketrs::async_trait]
-        impl<'r>$crate::rocket::rocketrs::request::FromRequest<'r> for $T {
+        #[$crate::rocket::async_trait]
+        impl<'r>$crate::rocket::request::FromRequest<'r> for $T {
             type Error = TokenError;
 
-            async fn from_request(req: &'r$crate::rocket::rocketrs::request::Request<'_>) ->$crate::rocket::rocketrs::request::Outcome<Self, TokenError> {
+            async fn from_request(req: &'r $crate::rocket::request::Request<'_>) ->$crate::rocket::Outcome<Self, TokenError> {
 
                 let body = req.local_cache(|| return "".to_string());
 
                 let mut cache = match ncryptf::rocket::get_cache(req) {
                     Ok(cache) => cache,
-                    Err(_error) => return$crate::rocket::rocketrs::request::Outcome::Failure(($crate::rocket::rocketrs::http::Status::InternalServerError, TokenError::ServerError))
+                    Err(_error) => return$crate::rocket::Outcome::Failure(($crate::rocket::Status::InternalServerError, TokenError::ServerError))
                 };
 
                 // Retrieve the Authorization header
                 let header: String = match req.headers().get_one("Authorization") {
                     Some(h) => h.to_string(),
-                    None => return$crate::rocket::rocketrs::request::Outcome::Failure(($crate::rocket::rocketrs::http::Status::Unauthorized, TokenError::InvalidToken))
+                    None => return$crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
                 };
 
                 let params = match ncryptf::Authorization::extract_params_from_header_string(header) {
                     Ok(params) => params,
-                    Err(_) => return$crate::rocket::rocketrs::request::Outcome::Failure(($crate::rocket::rocketrs::http::Status::Unauthorized, TokenError::InvalidToken))
+                    Err(_) => return$crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
                 };
 
                 match <$T>::get_token_from_access_token(params.access_token).await {
                     Ok(token) => {
                         // Create a new datetime from the data parameter, or the request header
-                        let date: $crate::rocket::chrono::DateTime<$crate::rocket::chrono::Utc> = match params.date {
+                        let date: $crate::rocket::DateTime<$crate::rocket::Utc> = match params.date {
                             Some(date) => date,
                             None => {
-                                let date: $crate::rocket::chrono::DateTime<$crate::rocket::chrono::Utc> = match req.headers().get_one("X-Date") {
+                                let date: $crate::rocket::DateTime<$crate::rocket::Utc> = match req.headers().get_one("X-Date") {
                                     Some(h) => {
-                                        let date = $crate::rocket::chrono::DateTime::parse_from_rfc2822(&h.to_string());
-                                        date.unwrap().with_timezone(&$crate::rocket::chrono::Utc)
+                                        let date = $crate::rocket::DateTime::parse_from_rfc2822(&h.to_string());
+                                        date.unwrap().with_timezone(&$crate::rocket::Utc)
                                     },
-                                    None => return$crate::rocket::rocketrs::request::Outcome::Failure(($crate::rocket::rocketrs::http::Status::Unauthorized, TokenError::InvalidToken))
+                                    None => return$crate::rocket::request::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
                                 };
                                 date
                             }
@@ -131,10 +140,10 @@ macro_rules! auth {
                                                             Ok(public_key) => {
                                                                 let signature_pk = token.get_signature_public_key().unwrap();
                                                                 if !$crate::rocket::constant_time_eq::constant_time_eq(&public_key, &signature_pk) {
-                                                                    return$crate::rocket::rocketrs::request::Outcome::Failure(($crate::rocket::rocketrs::http::Status::Unauthorized, TokenError::SignatureInvalid));
+                                                                    return$crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::SignatureInvalid));
                                                                 }
                                                             },
-                                                            Err(_) => return$crate::rocket::rocketrs::request::Outcome::Failure(($crate::rocket::rocketrs::http::Status::Unauthorized, TokenError::SignatureInvalid))
+                                                            Err(_) => return$crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::SignatureInvalid))
                                                         }
                                                     }
                                                 },
@@ -144,18 +153,18 @@ macro_rules! auth {
                                         None => {}
                                     };
                                     match <$T>::get_user_from_token(token).await {
-                                        Ok(user) => return$crate::rocket::rocketrs::request::Outcome::Success(*user),
-                                        Err(_) => return$crate::rocket::rocketrs::request::Outcome::Failure(($crate::rocket::rocketrs::http::Status::Unauthorized, TokenError::InvalidToken))
+                                        Ok(user) => return$crate::rocket::Outcome::Success(*user),
+                                        Err(_) => return$crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
                                     };
                                 }
                             },
-                            Err(_) => return$crate::rocket::rocketrs::request::Outcome::Failure(($crate::rocket::rocketrs::http::Status::Unauthorized, TokenError::InvalidToken))
+                            Err(_) => return$crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
                         };
                     },
-                    Err(_) => return$crate::rocket::rocketrs::request::Outcome::Failure(($crate::rocket::rocketrs::http::Status::Unauthorized, TokenError::InvalidToken))
+                    Err(_) => return$crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
                 };
 
-                return$crate::rocket::rocketrs::request::Outcome::Failure(($crate::rocket::rocketrs::http::Status::Unauthorized, TokenError::InvalidToken))
+                return$crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
             }
         }
     }
