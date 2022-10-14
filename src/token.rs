@@ -18,6 +18,25 @@ pub struct Token {
 }
 
 impl Token {
+    /// Creates a new token with a given lifetime
+    pub fn new(lifetime: i64) -> Token {
+        let now = Utc::now().timestamp();
+        let expires_at: i64;
+        if lifetime >= 0 {
+            expires_at = now + lifetime;
+        } else {
+            expires_at = now;
+        }
+
+        return Self {
+            access_token: base64::encode(crate::util::randombytes_buf(48)),
+            refresh_token: base64::encode(crate::util::randombytes_buf(64)),
+            ikm: crate::util::randombytes_buf(32),
+            signature: crate::util::randombytes_buf(64),
+            expires_at: expires_at
+        };
+    }
+
     /// Creates a new token from the provided values
     pub fn from(access_token: String, refresh_token: String, ikm: Vec<u8>, signature: Vec<u8>, expires_at: i64) -> Result<Token, Error> {
         if ikm.len() != 32 {

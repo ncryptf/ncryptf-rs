@@ -18,9 +18,18 @@ use rocket::{
     }
 };
 use serde::{Serialize, Deserialize};
-use super::{NCRYPTF_CONTENT_TYPE, EncryptionKey, RequestSigningPublicKey, RequestPublicKey, fairing::FairingConsumed, get_cache};
+use super::{
+    NCRYPTF_CONTENT_TYPE,
+    EncryptionKey,
+    RequestSigningPublicKey,
+    RequestPublicKey,
+    fairing::FairingConsumed,
+    get_cache
+};
 
-use redis::Commands;
+use async_std::task;
+#[allow(unused_imports)] // for rust-analyzer
+use rocket_db_pools::deadpool_redis::redis::AsyncCommands;
 
 // Error returned by the [`Json`] guard when JSON deserialization fails.
 #[derive(Debug)]
@@ -116,7 +125,7 @@ impl<T> Json<T> {
                 match h {
                     NCRYPTF_CONTENT_TYPE => {
                         // Retrieve the redis connection
-                        let mut conn: redis::Connection = match get_cache(req) {
+                        let mut conn: rocket_db_pools::deadpool_redis::Connection = match get_cache(req) {
                             Ok(conn) => conn,
                             Err(error) => return Err(error)
                         };
@@ -132,13 +141,17 @@ impl<T> Json<T> {
                             }
                         };
 
-                        // Retrive the JSON struct for the encryption key
-                        let json: String = match conn.get(hash_id) {
-                            Ok(k) => k,
-                            Err(_error) => {
-                                return Err(Error::Io(io::Error::new(io::ErrorKind::Other, "Encryption key is either invalid, or may have expired.")));
-                            }
-                        };
+                        let json: String = task::block_on(async {
+                            // Retrive the JSON struct for the encryption key
+                            return match conn.get(hash_id).await {
+                                Ok(k) => k,
+                                Err(_error) => "".to_string()
+                            };
+                        });
+
+                        if json.is_empty() {
+                            return Err(Error::Io(io::Error::new(io::ErrorKind::Other, "Encryption key is either invalid, or may have expired.")));
+                        }
 
                         // Deserialize the encryption key into a useful struct
                         let ek: EncryptionKey = match serde_json::from_str(&json) {
@@ -153,12 +166,12 @@ impl<T> Json<T> {
 
                         // Delete the key if it is ephemeral
                         if ek.is_ephemeral() {
-                            match conn.del(hash_id) {
-                                Ok(k) => k,
-                                Err(error) => {
-                                    return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
-                                }
-                            };
+                            task::block_on(async {
+                                match conn.del(hash_id).await {
+                                    Ok(k) => k,
+                                    Err(_) => {}
+                                };
+                            });
                         }
 
                         // Decrypt the response, then deserialize the underlying JSON into the requested struct
@@ -325,7 +338,7 @@ impl<'r, T: Serialize> Responder<'r, 'static> for Json<T> {
 
                         // Create an encryption key then store it in Redis
                         // The client can choose to use the new key or ignore it, but we're always going to provide our own for each request
-                        let mut conn: redis::Connection = match get_cache(req) {
+                        let mut conn: rocket_db_pools::deadpool_redis::Connection = match get_cache(req) {
                             Ok(conn) => conn,
                             Err(_error) => return Err(Status::InternalServerError)
                         };
@@ -333,10 +346,12 @@ impl<'r, T: Serialize> Responder<'r, 'static> for Json<T> {
                         let ek = EncryptionKey::new(false);
                         let d = serde_json::to_string(&ek).unwrap();
 
-                        match conn.set_ex(ek.get_hash_id(), d, 3600) {
-                            Ok(r) => r,
-                            Err(_) => return Err(Status::InternalServerError)
-                        };
+                        task::block_on(async {
+                            match conn.set_ex(ek.get_hash_id(), d, 3600).await {
+                                Ok(r) => r,
+                                Err(_) => {}
+                            };
+                        });
 
                         let mut request = match crate::Request::from(
                             ek.get_box_kp().get_secret_key(),

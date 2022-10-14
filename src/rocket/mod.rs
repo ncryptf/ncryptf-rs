@@ -30,37 +30,35 @@ pub use auth::AuthorizationTrait;
 pub use auth::*;
 pub use auth::TokenError;
 
+use rocket_db_pools::{
+    deadpool_redis::{
+        Config,
+        Connection,
+        Runtime
+    }
+};
+
+use async_std::task;
+
+#[allow(unused_imports)] // for rust-analyzer
+use rocket_db_pools::deadpool_redis::redis::AsyncCommands;
+
 #[doc(hidden)]
-pub fn get_cache<'r>(req: &'r Request<'_>) -> Result<redis::Connection, Error<'r>> {
-    // Retrieve the redis connection string from the figment
-    let rdb = match req.rocket().figment().find_value("databases.cache") {
-       Ok(config) => {
-           let url = config.find("url");
-           if url.is_some() {
-               let o = url.to_owned().unwrap();
-               o.into_string().unwrap()
-           } else {
-               return Err(Error::Io(io::Error::new(io::ErrorKind::Other, "Unable to retrieve Redis faring configuration.")));
-           }
-       },
-       Err(error) => {
-           return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
-       }
-   };
-
-   // Create a new client
-   let client = match redis::Client::open(rdb) {
-       Ok(client) => client,
-       Err(error) => {
-           return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
-       }
-   };
-
-   // Retrieve the connection string
-   match client.get_connection() {
-       Ok(conn) => return Ok(conn),
-       Err(error) => {
-           return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
-       }
-   };
+pub fn get_cache<'r>(req: &'r Request<'_>) -> Result<Connection, Error<'r>> {
+    match req.rocket().figment().find_value("databases.cache") {
+        Ok(config) => match config.find("url") {
+            Some(url) => {
+                let cfg = Config::from_url(url.into_string().unwrap());
+                let pool = cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
+                match  task::block_on(async {
+                    return pool.get().await;
+                }) {
+                    Ok(conn) => return Ok(conn),
+                    Err(error) => return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())))
+                };
+            },
+            None =>  Err(Error::Io(io::Error::new(io::ErrorKind::Other, "Unable to retrieve cache faring configuration.")))
+        },
+        Err(error) => return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())))
+    }
 }
