@@ -44,7 +44,7 @@ use async_std::task;
 use rocket_db_pools::deadpool_redis::redis::AsyncCommands;
 
 #[doc(hidden)]
-pub fn get_cache<'r>(req: &'r Request<'_>) -> Result<Connection, Error<'r>> {
+pub(crate) fn get_cache<'r>(req: &'r Request<'_>) -> Result<Connection, Error<'r>> {
     match req.rocket().figment().find_value("databases.cache") {
         Ok(config) => match config.find("url") {
             Some(url) => {
