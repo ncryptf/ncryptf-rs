@@ -17,8 +17,8 @@ pub struct User {
 #[async_trait]
 impl ncryptf::rocket::AuthorizationTrait for User {
     /// Our static implementation returns a static token
-    async fn get_token_from_access_token(_access_token: String, _cache: &mut redis::Connection) -> Result<ncryptf::Token, ncryptf::rocket::TokenError> {
-        let now = Utc::now().timestamp();
+    async fn get_token_from_access_token(_access_token: String, _f: rocket_db_pools::figment::Figment) -> Result<ncryptf::Token, ncryptf::rocket::TokenError> {
+        let now = chrono::Utc::now().timestamp();
 
         let token =  ncryptf::Token::from(
             "x2gMeJ5Np0CcKpZav+i9iiXeQBtaYMQ/yeEtcOgY3J".to_string(),
@@ -32,7 +32,7 @@ impl ncryptf::rocket::AuthorizationTrait for User {
     }
 
     /// Returns a static user from an authorization token
-    async fn get_user_from_token(_token: ncryptf::Token, _cache: &mut redis::Connection) -> Result<Box<Self>, ncryptf::rocket::TokenError> {
+    async fn get_user_from_token(_token: ncryptf::Token, _f: rocket_db_pools::figment::Figment) -> Result<Box<Self>, ncryptf::rocket::TokenError> {
         return Ok(Box::new(User { id: 1 }));
     }
 }
@@ -69,6 +69,13 @@ fn setup() -> Client{
     let config = rocket::Config::figment()
         .merge(("ident", false))
         .merge(("databases.cache", rocket_db_pools::Config {
+            url: format!("redis://127.0.0.1:6379/"),
+            min_connections: None,
+            max_connections: 1024,
+            connect_timeout: 3,
+            idle_timeout: None,
+        }))
+        .merge(("databases.cache2", rocket_db_pools::Config {
             url: format!("redis://127.0.0.1:6379/"),
             min_connections: None,
             max_connections: 1024,
@@ -292,7 +299,7 @@ fn test_auth_echo_plain_to_plain() {
     let json: serde_json::Value = serde_json::from_str(r#"{ "hello": "world"}"#).unwrap();
 
     // Always use the current time
-    let now = Utc::now().timestamp();
+    let now = chrono::Utc::now().timestamp();
 
     // We really only care about the ikm and signature
     // This information should be extracted from a local cache
@@ -308,7 +315,7 @@ fn test_auth_echo_plain_to_plain() {
         "POST".to_string(),
         "/auth_echo".to_string(),
         token,
-        Utc::now(),
+        chrono::Utc::now(),
         json.clone().to_string(),
         None,
         Some(2)
@@ -344,7 +351,7 @@ fn test_auth_echo_encrypted_to_plain() {
     let kp = ncryptf::Keypair::new();
 
     // Always use the current time
-    let now = Utc::now().timestamp();
+    let now = chrono::Utc::now().timestamp();
 
     // We really only care about the ikm and signature
     // This information should be extracted from a local cache
@@ -374,7 +381,7 @@ fn test_auth_echo_encrypted_to_plain() {
         "POST".to_string(),
         "/auth_echo".to_string(),
         token,
-        Utc::now(),
+        chrono::Utc::now(),
         json.clone().to_string(),
         None,
         Some(2)

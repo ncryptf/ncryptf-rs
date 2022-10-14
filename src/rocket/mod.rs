@@ -18,10 +18,7 @@ pub use json::Json;
 mod ek;
 pub use ek::EncryptionKey;
 pub use ek::ExportableEncryptionKeyData;
-pub use ek::EkRoute;
-pub use auth::AuthorizationTrait;
-pub use auth::RocketAuth;
-pub use auth::TokenError;
+pub use ek::*;
 mod fairing;
 pub use fairing::Fairing;
 pub use fairing::FairingConsumed;
@@ -29,8 +26,11 @@ pub use fairing::NcryptfRequestVersion;
 pub use fairing::NcryptfRawBody;
 use rocket::Request;
 mod auth;
+pub use auth::AuthorizationTrait;
+pub use auth::*;
+pub use auth::TokenError;
 
-/// Retrieves the cache
+#[doc(hidden)]
 pub fn get_cache<'r>(req: &'r Request<'_>) -> Result<redis::Connection, Error<'r>> {
     // Retrieve the redis connection string from the figment
     let rdb = match req.rocket().figment().find_value("databases.cache") {
