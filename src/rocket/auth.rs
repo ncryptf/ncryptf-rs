@@ -89,7 +89,7 @@ macro_rules! auth {
 
                 let params = match ncryptf::Authorization::extract_params_from_header_string(header) {
                     Ok(params) => params,
-                    Err(_) => return$crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
+                    Err(_) => return $crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
                 };
 
                 match <$T>::get_token_from_access_token(params.access_token, dbs.clone()).await {
@@ -103,7 +103,9 @@ macro_rules! auth {
                                         let date = $crate::rocket::DateTime::parse_from_rfc2822(&h.to_string());
                                         date.unwrap().with_timezone(&$crate::rocket::Utc)
                                     },
-                                    None => return$crate::rocket::request::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
+                                    None => {
+                                        return$crate::rocket::request::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken));
+                                    }
                                 };
                                 date
                             }
@@ -122,6 +124,8 @@ macro_rules! auth {
                             params.version
                         ) {
                             Ok(auth) => {
+
+                        dbg!("hit");
                                 if auth.verify(params.hmac, $crate::rocket::NCRYPTF_DRIFT_ALLOWANCE) {
                                     // If the header is ncryptf, then also check the signing public key and do a constant time check
                                     match req.headers().get_one("Content-Type") {
@@ -157,10 +161,10 @@ macro_rules! auth {
                             Err(_) => return$crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
                         };
                     },
-                    Err(_) => return$crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
+                    Err(_) => return $crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
                 };
 
-                return$crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
+                return $crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
             }
         }
     }

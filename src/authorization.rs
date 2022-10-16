@@ -179,16 +179,16 @@ impl Authorization {
         if header.starts_with("HMAC ") {
             let auth_header = header.replace("HMAC ", "");
             if auth_header.contains(",") {
-                let mut params: Vec<String> = auth_header.split(",").map(|s| s.to_string()).collect();
+                let params: Vec<String> = auth_header.split(",").map(|s| s.to_string()).collect();
                 if params.len() != 3 {
                     return Err(Error::InvalidArgument(String::from("Header parameters are not valid.")));
                 }
 
                 return Ok(
                     AuthParams {
-                        access_token: params.pop().unwrap(),
-                        hmac: base64::decode(params.pop().unwrap()).unwrap(),
-                        salt: base64::decode(params.pop().unwrap()).unwrap(),
+                        access_token: params[0].clone(),
+                        hmac: base64::decode(params[1].clone()).unwrap(),
+                        salt: base64::decode(params[2].clone()).unwrap(),
                         version: Some(1),
                         date: None
                     }

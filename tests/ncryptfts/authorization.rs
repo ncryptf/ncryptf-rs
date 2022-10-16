@@ -81,3 +81,31 @@ fn test_verify_hmac() {
         assert!(result == true);
     }
 }
+
+#[test]
+fn test_auth_header_extract() {
+    let date = get_date();
+    let salt = get_salt();
+    let token = get_token();
+
+    let auth = Authorization::from(
+        "GET".to_string(),
+        "/".to_string(),
+        token.clone(),
+        date,
+        "".to_string(),
+        Some(salt),
+        Some(2)
+    );
+    let header = auth.unwrap().get_header();
+    match Authorization::extract_params_from_header_string(header) {
+        Ok(params) => {
+            let at = params.access_token;
+            assert_eq!(token.access_token, at);
+        },
+        Err(error) => {
+            dbg!(error);
+            assert!(false);
+        }
+    };
+}
