@@ -65,9 +65,14 @@ impl Authorization {
             None => randombytes_buf(32)
         };
 
+        let v = match version {
+            Some(v) => Some(v),
+            None => Some(crate::NCRYPTF_CURRENT_VERSION)
+        };
+
         let sr: &[u8; 32] = &s.clone().try_into().unwrap();
         let ikm: &[u8; 32] = &token.clone().ikm.try_into().unwrap();
-        let signature = Signature::derive(m, uri, s.clone(), date, payload, version);
+        let signature = Signature::derive(m, uri, s.clone(), date, payload, v);
         let hkdf = Hkdf::<Sha256>::new(Some(sr), ikm);
         let mut okm = [0u8; 32];
         match hkdf.expand(&AUTH_INFO.as_bytes(),&mut okm) {
@@ -92,7 +97,7 @@ impl Authorization {
             date,
             signature,
             hmac: hmac,
-            version
+            version: v
         });
     }
 

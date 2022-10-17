@@ -9,7 +9,7 @@ fn test_v1_signatures() {
     let salt = get_salt();
 
     for (i, case) in cases.iter().enumerate() {
-        let signature = Signature::derive(case.method.clone(), case.uri.clone(), salt.clone(), date, case.payload.clone(), None);
+        let signature = Signature::derive(case.method.clone(), case.uri.clone(), salt.clone(), date, case.payload.clone(), Some(1));
         let expected = signatures.get(i).unwrap().to_owned();
         let e = expected.as_str();
         let s: Vec<&str> = signature.split("\n").collect();

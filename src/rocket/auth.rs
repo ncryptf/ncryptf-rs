@@ -124,8 +124,6 @@ macro_rules! auth {
                             params.version
                         ) {
                             Ok(auth) => {
-
-                        dbg!("hit");
                                 if auth.verify(params.hmac, $crate::rocket::NCRYPTF_DRIFT_ALLOWANCE) {
                                     // If the header is ncryptf, then also check the signing public key and do a constant time check
                                     match req.headers().get_one("Content-Type") {
@@ -152,13 +150,14 @@ macro_rules! auth {
                                         },
                                         None => {}
                                     };
+
                                     match <$T>::get_user_from_token(token, dbs).await {
-                                        Ok(user) => return$crate::rocket::Outcome::Success(*user),
-                                        Err(_) => return$crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
+                                        Ok(user) => return $crate::rocket::Outcome::Success(*user),
+                                        Err(_) => return $crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
                                     };
                                 }
                             },
-                            Err(_) => return$crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
+                            Err(_) => return $crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
                         };
                     },
                     Err(_) => return $crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))

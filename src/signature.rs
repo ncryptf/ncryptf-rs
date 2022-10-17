@@ -26,7 +26,12 @@ impl Signature {
         payload: String,
         version: Option<i8>
     ) -> String {
-        let hash = Self::get_signature_hash(payload, salt.clone(), version);
+        let v = match version {
+            Some(v) => Some(v),
+            None => Some(crate::NCRYPTF_CURRENT_VERSION)
+        };
+
+        let hash = Self::get_signature_hash(payload, salt.clone(), v);
         let b64s = base64::encode(salt);
         let ts = datetime.to_rfc2822();
 

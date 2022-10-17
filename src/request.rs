@@ -42,7 +42,7 @@ impl Request {
     }
 
     /// Encrypts a message with a given public key, none, and version identifier
-    pub fn encrypt_with_nonce(&mut self, data: String, public_key: Vec<u8>, nonce: Option<Vec<u8>>, version: Option<i32>) -> Result<Vec<u8>, Error> {
+    pub fn encrypt_with_nonce(&mut self, data: String, public_key: Vec<u8>, nonce: Option<Vec<u8>>, version: Option<i8>) -> Result<Vec<u8>, Error> {
         let n = match nonce {
             Some(n) => n,
             None => randombytes_buf(CRYPTO_BOX_NONCEBYTES as usize)
