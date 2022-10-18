@@ -63,6 +63,7 @@ impl RocketFairing for Fairing {
 
                     req.local_cache(|| NcryptfRequestVersion(version));
                     req.local_cache(|| NcryptfRawBody(string.clone()));
+                    let rq = req.local_cache(|| NcryptfRawBody(string.clone()));
                     let _ = crate::rocket::Json::<serde_json::Value>::deserialize_req_from_string(req, string);
                 }
             },

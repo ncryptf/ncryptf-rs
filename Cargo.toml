@@ -37,7 +37,7 @@ name = "ncryptf"
 
 [features]
 default = []
-rocket = ["dep:rocket", "dep:rocket_db_pools", "dep:async-trait", "dep:async-std"]
+rocket = ["dep:rocket", "dep:rocket_db_pools", "dep:async-trait"]
 client = ["dep:reqwest", "dep:tracing", "dep:async-recursion"]
 
 [dev-dependencies]

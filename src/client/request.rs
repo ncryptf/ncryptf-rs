@@ -53,15 +53,12 @@ impl Request {
         };
 
         let furi = format!("{}{}", self.endpoint, "/ncryptf/ek");
-        dbg!(furi.clone());
         let builder = self.client.clone().get(furi)
             .headers(headers);
 
-        dbg!("Sending request");
         match builder.send().await {
             Ok(response) => match response.status() {
                 reqwest::StatusCode::OK => {
-                    dbg!("OK");
                     let body = match hashid.clone() {
                         Some(_) => {
                             let resp = crate::Response::from(kp.get_secret_key()).unwrap();
@@ -73,19 +70,13 @@ impl Request {
                         },
                         _ => response.text().await.unwrap()
                     };
-                    dbg!(body.clone());
 
                     match serde_json::from_str::<crate::rocket::ExportableEncryptionKeyData>(&body) {
                         Ok(ek) => {
                             self.ek = Some(ek.clone());
-
-                            dbg!(ek.clone());
                             match hashid.clone() {
                                 Some(_) => return Ok(true),
-                                _ => {
-                                    dbg!("Rekeying with client provided hash id");
-                                    return self.rekey(Some(ek.hash_id)).await
-                                }
+                                _ => return self.rekey(Some(ek.hash_id)).await
                             }
                         },
                         Err(_error) => return Err(RequestError::ReKeyError)
@@ -129,14 +120,10 @@ impl Request {
                 None
             ) {
                 Ok(auth) => Some(auth),
-                Err(error) => {
-                    return Err(RequestError::AuthConstructionError)
-                }
+                Err(_error) => return Err(RequestError::AuthConstructionError)
             },
             None => None
         };
-        dbg!("Auth setup");
-
 
         let mut headers = HeaderMap::new();
         headers.insert("Content-Type", HeaderValue::from_str(&"application/json").unwrap());
@@ -155,7 +142,6 @@ impl Request {
 
         match builder.send().await {
             Ok(response) => {
-                dbg!("response received");
                 // If the key is ephemeral or expired, we need to purge it so future requests don't use it
                 // We can handle re-keying on the next request
                 if self.ek.clone().unwrap().ephemeral || self.ek.clone().unwrap().is_expired() {

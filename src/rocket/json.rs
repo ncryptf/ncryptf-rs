@@ -27,9 +27,8 @@ use super::{
     get_cache
 };
 
-use async_std::task;
 #[allow(unused_imports)] // for rust-analyzer
-use rocket_db_pools::deadpool_redis::redis::AsyncCommands;
+use rocket_db_pools::deadpool_redis::redis::Commands;
 
 // Error returned by the [`Json`] guard when JSON deserialization fails.
 #[derive(Debug)]
@@ -125,7 +124,7 @@ impl<T> Json<T> {
                 match h {
                     NCRYPTF_CONTENT_TYPE => {
                         // Retrieve the redis connection
-                        let mut conn: rocket_db_pools::deadpool_redis::Connection = match get_cache(req) {
+                        let mut conn: rocket_db_pools::deadpool_redis::redis::Connection = match get_cache(req) {
                             Ok(conn) => conn,
                             Err(error) => return Err(error)
                         };
@@ -141,13 +140,11 @@ impl<T> Json<T> {
                             }
                         };
 
-                        let json: String = task::block_on(async {
-                            // Retrive the JSON struct for the encryption key
-                            return match conn.get(hash_id).await {
-                                Ok(k) => k,
-                                Err(_error) => "".to_string()
-                            };
-                        });
+                        // Retrive the JSON struct for the encryption key
+                        let json = match conn.get(hash_id) {
+                            Ok(k) => k,
+                            Err(_error) => "".to_string()
+                        };
 
                         if json.is_empty() {
                             return Err(Error::Io(io::Error::new(io::ErrorKind::Other, "Encryption key is either invalid, or may have expired.")));
@@ -166,12 +163,10 @@ impl<T> Json<T> {
 
                         // Delete the key if it is ephemeral
                         if ek.is_ephemeral() {
-                            task::block_on(async {
-                                match conn.del(hash_id).await {
-                                    Ok(k) => k,
-                                    Err(_) => {}
-                                };
-                            });
+                            match conn.del(hash_id) {
+                                Ok(k) => k,
+                                Err(_) => {}
+                            };
                         }
 
                         // Decrypt the response, then deserialize the underlying JSON into the requested struct
@@ -324,6 +319,8 @@ impl<'r, T: Serialize> Responder<'r, 'static> for Json<T> {
                             return RequestPublicKey(Vec::<u8>::new());
                         });
 
+                        dbg!("Returning client public key");
+
                         let pk: Vec<u8>;
                         // If the cache data is empty, check the header as a fallback
                         if cpk.0.is_empty() {
@@ -336,22 +333,25 @@ impl<'r, T: Serialize> Responder<'r, 'static> for Json<T> {
                             pk = cpk.0.clone();
                         }
 
-                        // Create an encryption key then store it in Redis
-                        // The client can choose to use the new key or ignore it, but we're always going to provide our own for each request
-                        let mut conn: rocket_db_pools::deadpool_redis::Connection = match get_cache(req) {
-                            Ok(conn) => conn,
-                            Err(_error) => return Err(Status::InternalServerError)
-                        };
+                        dbg!("getting client public key form header");
 
                         let ek = EncryptionKey::new(false);
                         let d = serde_json::to_string(&ek).unwrap();
 
-                        task::block_on(async {
-                            match conn.set_ex(ek.get_hash_id(), d, 3600).await {
-                                Ok(r) => r,
-                                Err(_) => {}
-                            };
-                        });
+                         // Create an encryption key then store it in Redis
+                        // The client can choose to use the new key or ignore it, but we're always going to provide our own for each request
+                        let mut conn: rocket_db_pools::deadpool_redis::redis::Connection = match get_cache(req) {
+                            Ok(conn) => conn,
+                            Err(_error) => return Err(Status::InternalServerError)
+                        };
+
+                        dbg!("Going to block for Redis...");
+                        match conn.set_ex(ek.get_hash_id(), d, 3600) {
+                            Ok(r) => r,
+                            Err(_) => {}
+                        };
+
+                        dbg!("Done with redis");
 
                         let mut request = match crate::Request::from(
                             ek.get_box_kp().get_secret_key(),
