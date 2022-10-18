@@ -4,13 +4,21 @@ use crate::Signature;
 use rand::{distributions::Alphanumeric, Rng};
 
 /// Reusable encryption key data for client parsing
-/// 
+///
 /// This is exported for use in your application for deserializing the request.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ExportableEncryptionKeyData {
     pub public: String,
     pub signature: String,
-    pub hash_id: String
+    pub hash_id: String,
+    pub expires_at: i64,
+    pub ephemeral: bool
+}
+
+impl ExportableEncryptionKeyData {
+    pub fn is_expired(&self) -> bool {
+        return self.expires_at >= chrono::Utc::now().timestamp();
+    }
 }
 
 /// Represents an Encryption key used to encrypt and decrypt requests
@@ -148,7 +156,9 @@ macro_rules! ek_route {
                 return Ok(ncryptf::rocket::Json(ExportableEncryptionKeyData {
                     public: base64::encode(ek.get_box_kp().get_public_key()),
                     signature: base64::encode(ek.get_sign_kp().get_public_key()),
-                    hash_id: ek.get_hash_id()
+                    hash_id: ek.get_hash_id(),
+                    ephemeral: true,
+                    expires_at: ek.expires_at
                 }));
             }
         }

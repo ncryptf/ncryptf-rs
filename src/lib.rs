@@ -20,3 +20,6 @@ pub use util::randombytes_buf;
 
 #[cfg(feature = "rocket")]
 pub mod rocket;
+
+#[cfg(feature = "client")]
+pub mod client;

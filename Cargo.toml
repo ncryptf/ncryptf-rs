@@ -21,7 +21,6 @@ sha2 = { version = "^0.10"  }
 hmac = { version = "^0.12" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
-reqwest = { version = "^0.11", optional = true, features = ["json"] }
 constant_time_eq = { version = "^0.2" }
 hex = { version =  "^0.4" }
 rand = { version = "0.8.5" }
@@ -29,6 +28,9 @@ rocket = { version = "0.5.0-rc.2", features = ["json"], optional = true  }
 rocket_db_pools = { version = "0.1.0-rc.2", features = ["deadpool_redis"], optional = true }
 async-trait = { version = "^0.1", optional = true }
 async-std = { version = "^1.12", optional = true }
+reqwest = { version = "^0.11", features = ["json", "rustls-tls", "native-tls", "brotli", "gzip", "stream"], optional = true }
+tracing = { version = "^0.1", optional = true }
+async-recursion = { version = "^1.0", optional = true }
 
 [lib]
 name = "ncryptf"
@@ -36,6 +38,7 @@ name = "ncryptf"
 [features]
 default = []
 rocket = ["dep:rocket", "dep:rocket_db_pools", "dep:async-trait", "dep:async-std"]
+client = ["dep:reqwest", "dep:tracing", "dep:async-recursion"]
 
 [dev-dependencies]
 rocket = { version = "0.5.0-rc.2"  }
