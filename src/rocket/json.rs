@@ -319,8 +319,6 @@ impl<'r, T: Serialize> Responder<'r, 'static> for Json<T> {
                             return RequestPublicKey(Vec::<u8>::new());
                         });
 
-                        dbg!("Returning client public key");
-
                         let pk: Vec<u8>;
                         // If the cache data is empty, check the header as a fallback
                         if cpk.0.is_empty() {
@@ -333,8 +331,6 @@ impl<'r, T: Serialize> Responder<'r, 'static> for Json<T> {
                             pk = cpk.0.clone();
                         }
 
-                        dbg!("getting client public key form header");
-
                         let ek = EncryptionKey::new(false);
                         let d = serde_json::to_string(&ek).unwrap();
 
@@ -345,13 +341,10 @@ impl<'r, T: Serialize> Responder<'r, 'static> for Json<T> {
                             Err(_error) => return Err(Status::InternalServerError)
                         };
 
-                        dbg!("Going to block for Redis...");
                         match conn.set_ex(ek.get_hash_id(), d, 3600) {
                             Ok(r) => r,
                             Err(_) => {}
                         };
-
-                        dbg!("Done with redis");
 
                         let mut request = match crate::Request::from(
                             ek.get_box_kp().get_secret_key(),
