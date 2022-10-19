@@ -210,12 +210,13 @@ impl Request {
             _ => {
                 headers.insert("Content-Type", HeaderValue::from_str(&"application/vnd.ncryptf+json").unwrap());
                 let sk = match self.token.clone() {
-                    Some(token) => token.get_signature_public_key().unwrap(),
+                    Some(token) => token.signature,
                     None => {
                         let sk = crate::Signature::new();
                         sk.get_secret_key()
                     }
                 };
+
                 let mut request = crate::Request::from(kp.get_secret_key(), sk).unwrap();
                 match request.encrypt(payload.to_string(), self.ek.as_ref().unwrap().clone().get_public_key().unwrap()) {
                     Ok(body) => {
