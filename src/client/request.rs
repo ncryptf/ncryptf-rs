@@ -1,7 +1,6 @@
 use chrono::Utc;
 use thiserror::Error;
 use reqwest::header::{HeaderMap, HeaderValue};
-use tracing::warn;
 
 #[derive(Error, Debug)]
 pub enum RequestError {
