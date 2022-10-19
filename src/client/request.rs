@@ -18,7 +18,30 @@ pub enum RequestError {
     EncryptionError
 }
 
-/// Networking layer for requests
+/// The client request simplifies creating, sending, and handling an ncryptf request and response by providing a
+/// simplified API that utilizes reqwest underneath.
+///
+/// Requests can be constructed by calling:
+///
+/// ```rust
+/// let mut request = ncryptf::client::Request::new(client, "https://www.ncryptf.com", Some(ncryptf::Token));
+/// ```
+///
+/// and then use the helper http verbe methods to make an request, which will automatically handle setting up an encrypted request
+/// for you which includes bootstraping a new encryption key from a compliant server, and encrypting the request with a one-time encryption key
+/// that is thrown away at the end of the request
+///
+/// ```rust
+/// let response: ncryptf::Client::Response = request.get("/user/1").await.unwrap();
+/// let response: ncryptf::Client::Response = request.delete("/user/1").await.unwrap();
+/// let response: ncryptf::Client::Response = request.post("/user", "{ ... json ...}").await.unwrap();
+/// let response: ncryptf::Client::Response = request.put("/user/1", "{ .. json ..}").await.unwrap();
+/// ```
+///
+/// > NOTE: Only GET, DELETE, POST, and PUT verbs are supported for this client library -- you likely do not need to have an encrypted HEAD, or OPTIONS for an API.
+///
+/// An `ncryptf::Client::Response` is emitted on success. The response automatically handles decrypting the response for your application.
+#[derive(Debug)]
 pub struct Request {
     pub client: reqwest::Client,
     pub endpoint: String,
@@ -224,10 +247,10 @@ impl Request {
                 };
 
                 // Opportunistically update the encryption key headers
-                let hash_id = self.get_header_by_name(result.response.headers.get("x-hashid"));
-                let expires_at = self.get_header_by_name(result.response.headers.get("x-public-key-expiration"));
-                let public_key = self.get_key_string_by_result_or_header(result.response.pk.clone(), result.response.headers.get("x-public-key"));
-                let signature_key = self.get_key_string_by_result_or_header(result.response.sk.clone(), result.response.headers.get("x-signature-key"));
+                let hash_id = self.get_header_by_name(result.headers.get("x-hashid"));
+                let expires_at = self.get_header_by_name(result.headers.get("x-public-key-expiration"));
+                let public_key = self.get_key_string_by_result_or_header(result.pk.clone(), result.headers.get("x-public-key"));
+                let signature_key = self.get_key_string_by_result_or_header(result.sk.clone(), result.headers.get("x-signature-key"));
                 if hash_id.is_some() && expires_at.is_some() && public_key.is_some() && signature_key.is_some() {
                     let xp = expires_at.unwrap().parse::<i64>();
                     if xp.is_ok() {

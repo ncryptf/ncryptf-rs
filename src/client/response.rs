@@ -10,13 +10,18 @@ pub enum ResponseError {
     ResponseMissing,
 }
 
+/// Client feature Response provides a simple API for handling encrypted responses
+///
+/// `ncryptf::Client::Response::response` contains the common elements you'd receive from a response, including the http status as a `reqwest::StatusCode`,
+/// the response headers as a `reqwest::header::HeaderMap`, and the raw body response as a `Option<String>`.
+///
+/// If you have a defined struct, you can use the `into` method to deserialize the object into a struct. Handle as you would a serde_json::from_str()
+///
+/// ```rust
+/// let structure = response.into::<MyStructure>();
+/// ```
 #[derive(Debug, Clone)]
 pub struct Response {
-    pub response: InternalResponse
-}
-
-#[derive(Debug, Clone)]
-pub struct InternalResponse {
     pub status: reqwest::StatusCode,
     pub headers: reqwest::header::HeaderMap,
     pub body: Option<String>,
@@ -28,24 +33,22 @@ impl Response {
     /// Constructs a new response
     pub async fn new(response: reqwest::Response, sk: Vec<u8>) -> Result<Self, ResponseError> {
         let mut r = Self {
-            response: InternalResponse {
                 status: response.status(),
                 headers: response.headers().to_owned(),
                 body: None,
                 pk: None,
                 sk: None
-            }
         };
 
         match response.text().await {
             Ok(body) => {
-                match r.response.headers.get("Content-Type") {
+                match r.headers.get("Content-Type") {
                     Some(h) => match h.to_str() {
                         // If this is an NCRYPTF response, we need to decrypt it
                         Ok(crate::rocket::NCRYPTF_CONTENT_TYPE) => {
                             // If the body is empty, don't attempt to decrypt the response
                             if body.is_empty() {
-                                r.response.body = None;
+                                r.body = None;
                                 return Ok(r);
                             }
                             let body_bytes = base64::decode(body).unwrap();
@@ -55,9 +58,9 @@ impl Response {
                                     // If we've already decrypted the response then these will succeed
                                     let pk =crate::Response::get_public_key_from_response(body_bytes.clone()).unwrap();
                                     let sk = crate::Response::get_signing_public_key_from_response(body_bytes.clone()).unwrap();
-                                    r.response.body = Some(message);
-                                    r.response.pk = Some(pk);
-                                    r.response.sk = Some(sk);
+                                    r.body = Some(message);
+                                    r.pk = Some(pk);
+                                    r.sk = Some(sk);
                                     return Ok(r);
                                 },
                                 Err(_error) => return Err(ResponseError::DecryptingResponseFailed)
@@ -65,9 +68,9 @@ impl Response {
                         },
                         _ => {
                             if body.is_empty() {
-                                r.response.body = None
+                                r.body = None
                             } else {
-                                r.response.body = Some(body)
+                                r.body = Some(body)
                             }
 
                             return Ok(r);
@@ -85,6 +88,6 @@ impl Response {
 
     /// Converts the response into an actual struct object
     pub fn into<T: for<'a> serde::Deserialize<'a>>(self) -> Result<T, serde_json::Error> {
-        return serde_json::from_str::<T>(&self.response.body.unwrap());
+        return serde_json::from_str::<T>(&self.body.unwrap());
     }
 }
