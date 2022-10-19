@@ -1,4 +1,4 @@
 mod request;
-pub use request::Request;
+pub use request::{Request, RequestError};
 mod response;
-pub use response::Response;
+pub use response::{Response, ResponseError};

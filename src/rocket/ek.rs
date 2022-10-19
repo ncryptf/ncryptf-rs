@@ -16,8 +16,27 @@ pub struct ExportableEncryptionKeyData {
 }
 
 impl ExportableEncryptionKeyData {
+    /// Returns true if this key is expired
     pub fn is_expired(&self) -> bool {
         return self.expires_at >= chrono::Utc::now().timestamp();
+    }
+
+    /// Returns the public key as a Vec
+    pub fn get_public_key(&self) -> Option<Vec<u8>> {
+        if self.public.is_empty() {
+            return None;
+        }
+
+        return Some(base64::decode(self.public.clone()).unwrap());
+    }
+
+    /// Returns the signature key as a Vec
+    pub fn get_signature_key(&self) -> Option<Vec<u8>> {
+        if self.public.is_empty() {
+            return None;
+        }
+
+        return Some(base64::decode(self.signature.clone()).unwrap());
     }
 }
 

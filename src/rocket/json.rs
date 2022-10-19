@@ -364,6 +364,8 @@ impl<'r, T: Serialize> Responder<'r, 'static> for Json<T> {
 
                         return Response::build_from(d.respond_to(req)?)
                             .header(ContentType::new("application", "vnd.ncryptf+json"))
+                            .header(Header::new("x-public-key", base64::encode(ek.get_box_kp().get_public_key())))
+                            .header(Header::new("x-signature-public-key", base64::encode(ek.get_sign_kp().get_public_key())))
                             .header(Header::new("x-public-key-expiration", ek.expires_at.to_string()))
                             .header(Header::new("x-hashid", ek.get_hash_id()))
                             .ok()
