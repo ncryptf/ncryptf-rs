@@ -99,15 +99,31 @@ impl Request {
         }
     }
 
-    /// Performs a GET request
-    ///
-    /// If a token is provided, the request is assumed to require authentication and the appropriate auth header is added
-    /// GET requets are assumed to expect an encrypted response
-    /// This will bootstrap the encryption process if necessary for an ncryptf encrypted response
+    /// Performs an HTTP GET request
     pub async fn get(&mut self, url: &str) -> Result<crate::client::Response, RequestError> {
         return self.execute("GET", url, "").await;
     }
 
+    /// Performs an HTTP DELETE request
+    pub async fn delete(&mut self, url: &str) -> Result<crate::client::Response, RequestError> {
+        return self.execute("DELETE", url, "").await;
+    }
+
+    /// Performs an HTTP POST request
+    pub async fn post(&mut self, url: &str, payload: &str) -> Result<crate::client::Response, RequestError> {
+        return self.execute("POST", url, payload).await;
+    }
+
+    /// Performs an HTTP PUT request
+    pub async fn put(&mut self, url: &str, payload: &str) -> Result<crate::client::Response, RequestError> {
+        return self.execute("PUT", url, payload).await;
+    }
+
+    ///  Executes a requiest
+    ///
+    /// If a token is provided, the request is assumed to require authentication and the appropriate auth header is added
+    /// GET requets are assumed to expect an encrypted response
+    /// This will bootstrap the encryption process if necessary for an ncryptf encrypted response
     async fn execute(&mut self, method: &str, url: &str, payload: &str) -> Result<crate::client::Response, RequestError> {
         match &self.ek {
             Some(ek) => {
