@@ -18,7 +18,7 @@ pub struct ExportableEncryptionKeyData {
 impl ExportableEncryptionKeyData {
     /// Returns true if this key is expired
     pub fn is_expired(&self) -> bool {
-        return self.expires_at >= chrono::Utc::now().timestamp();
+        return chrono::Utc::now().timestamp() >= self.expires_at;
     }
 
     /// Returns the public key as a Vec
@@ -41,7 +41,7 @@ impl ExportableEncryptionKeyData {
 }
 
 /// Represents an Encryption key used to encrypt and decrypt requests
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EncryptionKey {
     bkp: Keypair,
     skp: Keypair,
@@ -75,7 +75,7 @@ impl EncryptionKey {
     /// Expiration should be handled server side
     /// But the client should know if they need a new key
     pub fn is_expired(&self) -> bool {
-        if self.expires_at.clone() > chrono::Utc::now().timestamp() {
+        if chrono::Utc::now().timestamp() >= self.expires_at {
             return true;
         }
 
@@ -90,11 +90,13 @@ impl EncryptionKey {
             .map(char::from)
             .collect();
 
+        // Encryption keys are valid for an hour
+        let expiration = chrono::Utc::now() + chrono::Duration::hours(1);
         return Self {
             bkp: Keypair::new(),
             skp: Signature::new(),
             ephemeral: ephemeral,
-            expires_at: chrono::Utc::now().timestamp() + 3600,
+            expires_at: expiration.timestamp(),
             hash_id: s
         }
     }

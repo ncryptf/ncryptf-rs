@@ -90,36 +90,22 @@ impl Request {
         let builder = self.client.clone().get(furi)
             .headers(headers);
 
-        match builder.send().await {
-            Ok(response) => match response.status() {
-                reqwest::StatusCode::OK => {
-                    let body = match hashid.clone() {
-                        Some(_) => {
-                            let resp = crate::Response::from(kp.get_secret_key()).unwrap();
-                            let d = base64::decode(response.text().await.unwrap()).unwrap();
-                            match resp.decrypt(d, Some(kp.get_public_key()), None) {
-                                Ok(data) => data,
-                                Err(_error) =>return Err(RequestError::ReKeyError)
-                            }
-                        },
-                        _ => response.text().await.unwrap()
-                    };
-
-                    match serde_json::from_str::<crate::rocket::ExportableEncryptionKeyData>(&body) {
-                        Ok(ek) => {
-                            self.ek = Some(ek.clone());
-                            match hashid.clone() {
-                                Some(_) => return Ok(true),
-                                _ => return self.rekey(Some(ek.hash_id)).await
-                            }
-                        },
-                        Err(_error) => return Err(RequestError::ReKeyError)
-                    };
-                },
+        match self.do_request(builder, kp).await {
+            Ok(response) => match response.status {
+                reqwest::StatusCode::OK => match serde_json::from_str::<crate::rocket::ExportableEncryptionKeyData>(&response.body.unwrap()) {
+                    Ok(ek) => {
+                        self.ek = Some(ek.clone());
+                        match hashid.clone() {
+                            Some(_) => return Ok(true),
+                            _ => return self.rekey(Some(ek.hash_id)).await
+                        }
+                    },
+                    Err(_error) => return Err(RequestError::ReKeyError)
+                }
                 _ => return Err(RequestError::ReKeyError)
             },
             Err(_error) => return Err(RequestError::ReKeyError)
-        }
+        };
     }
 
     /// Performs an HTTP GET request
@@ -142,7 +128,7 @@ impl Request {
         return self.execute("PUT", url, payload).await;
     }
 
-    ///  Executes a requiest
+    ///  Executes a request
     ///
     /// If a token is provided, the request is assumed to require authentication and the appropriate auth header is added
     /// GET requets are assumed to expect an encrypted response
@@ -238,8 +224,10 @@ impl Request {
             Ok(response) => {
                 // If the key is ephemeral or expired, we need to purge it so future requests don't use it
                 // We can handle re-keying on the next request
-                if self.ek.clone().unwrap().ephemeral || self.ek.clone().unwrap().is_expired() {
-                    self.ek = None;
+                if self.ek.is_some() {
+                    if self.ek.clone().unwrap().ephemeral || self.ek.clone().unwrap().is_expired() {
+                        self.ek = None;
+                    }
                 }
 
                 let result =match crate::client::Response::new(response, kp.get_secret_key()).await {
@@ -264,6 +252,7 @@ impl Request {
                         });
                     }
                 }
+
                 return Ok(result);
             },
             Err(error) => Err(RequestError::ReqwestError(error))
