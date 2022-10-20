@@ -24,8 +24,8 @@ serde_json = { version = "1", features = ["raw_value"] }
 constant_time_eq = { version = "^0.2" }
 hex = { version =  "^0.4" }
 rand = { version = "0.8.5" }
-rocket = { version = "0.5.0-rc.2", features = ["json"], optional = true  }
-rocket_db_pools = { version = "0.1.0-rc.2", features = ["deadpool_redis"], optional = true }
+rocket = { path = "./../rocket.rs/core/lib", features = ["json"], optional = true  }
+rocket_db_pools = { path = "./../rocket.rs/contrib/db_pools/lib", features = ["deadpool_redis"], optional = true }
 async-trait = { version = "^0.1", optional = true }
 async-std = { version = "^1.12", optional = true }
 reqwest = { version = "^0.11", features = ["json", "rustls-tls", "native-tls", "brotli", "gzip", "stream"], optional = true }
@@ -41,9 +41,9 @@ rocket = ["dep:rocket", "dep:rocket_db_pools", "dep:async-trait"]
 client = ["dep:reqwest", "dep:tracing", "dep:async-recursion"]
 
 [dev-dependencies]
-rocket = { version = "0.5.0-rc.2"  }
+rocket = { path = "./../rocket.rs/core/lib"  }
 reqwest = { version = "^0.11", features = ["json", "blocking"] }
-rocket_db_pools = { version = "0.1.0-rc.2", features = ["deadpool_redis"]}
+rocket_db_pools = { path = "./../rocket.rs/contrib/db_pools/lib", features = ["deadpool_redis"] }
 redis = { version = "^0.21" }
 
 [badges]
