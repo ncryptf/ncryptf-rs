@@ -38,7 +38,7 @@ impl RocketFairing for Fairing {
             // Other content types should work as-is without changes since we're only consuming this for specific content types
             if h.eq(crate::rocket::NCRYPTF_CONTENT_TYPE) || h.eq("application/json") {
                 let limit = req.limits().get("json").unwrap_or(Limits::JSON);
-                let result = data.peek(limit.as_u64() as usize).await;
+                let result = data.get_body(limit.as_u64() as usize).await;
                 let vec_data = result.to_vec();
                 let string = String::from_utf8(vec_data.clone()).unwrap();
                 req.local_cache(|| FairingConsumed(true));
@@ -59,7 +59,12 @@ impl RocketFairing for Fairing {
 
                 req.local_cache(|| NcryptfRequestVersion(version));
                 req.local_cache(|| NcryptfRawBody(string.clone()));
-                let _ = crate::rocket::Json::<serde_json::Value>::deserialize_req_from_string(req, string);
+                match crate::rocket::Json::<serde_json::Value>::deserialize_req_from_string(req, string) {
+                    Ok(decrypted) => {
+                        req.local_cache(|| return decrypted);
+                    },
+                    Err(_) => {}
+                }
             };
         }
     }

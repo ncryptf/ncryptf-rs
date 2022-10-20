@@ -254,9 +254,7 @@ impl<'r, T: Deserialize<'r>> Json<T> {
         let is_consumed = req.local_cache(|| FairingConsumed(false));
         match is_consumed.0 {
             // If the fairing is attached and we have already decrypted the string, we can simply return it as is without needing to decrypt it a second time
-            true => {
-                return Self::from_str(req.local_cache(|| return "".to_string()));
-            },
+            true => return Self::from_str(req.local_cache(|| return "".to_string())),
             false => {
                 let limit = req.limits().get("json").unwrap_or(Limits::JSON);
                 let string = match data.open(limit).into_string().await {
@@ -290,6 +288,9 @@ impl<'r, T: Deserialize<'r>> FromData<'r> for Json<T> {
                 Outcome::Failure((Status::PayloadTooLarge, Error::Io(e)))
             },
             Err(Error::Parse(s, e)) if e.classify() == serde_json::error::Category::Data => {
+                let sttr = req.local_cache(|| return "".to_string());
+                dbg!(sttr);
+                dbg!(e.to_string());
                 Outcome::Failure((Status::UnprocessableEntity, Error::Parse(s, e)))
             },
             Err(e) => Outcome::Failure((Status::BadRequest, e)),
