@@ -26,18 +26,24 @@ hex = { version =  "^0.4" }
 rand = { version = "0.8.5" }
 rocket = { git = "https://github.com/charlesportwoodii/rocket.rs", branch = "peek_buffer", features = ["json"], optional = true  }
 rocket_db_pools = {git = "https://github.com/charlesportwoodii/rocket.rs", branch = "peek_buffer", features = ["deadpool_redis"], optional = true }
+rocket_dyn_templates = { git = "https://github.com/charlesportwoodii/rocket.rs", branch = "peek_buffer", features = ["handlebars"], optional = true }
 async-trait = { version = "^0.1", optional = true }
 async-std = { version = "^1.12", optional = true }
 reqwest = { version = "^0.11", features = ["json", "rustls-tls", "native-tls", "brotli", "gzip", "stream"], optional = true }
 tracing = { version = "^0.1", optional = true }
 async-recursion = { version = "^1.0", optional = true }
 
+sea-orm-migration = { git = "https://github.com/charlesportwoodii/sea-orm", branch = "peek_buffer", features = ["sqlx-mysql",  "runtime-tokio-rustls"], optional = true }
+sea-orm = { git = "https://github.com/charlesportwoodii/sea-orm", branch = "peek_buffer", features = [ "sqlx-mysql", "runtime-tokio-rustls", "macros" ], optional = true }
+sea-orm-rocket = { git = "https://github.com/charlesportwoodii/sea-orm", branch = "peek_buffer", optional = true }
+
 [lib]
 name = "ncryptf"
 
 [features]
 default = []
-rocket = ["dep:rocket", "dep:rocket_db_pools", "dep:async-trait"]
+sea-orm = ["dep:sea-orm", "dep:sea-orm-migration", "dep:sea-orm-rocket"]
+rocket = ["dep:rocket", "dep:rocket_db_pools", "dep:async-trait", "dep:rocket_dyn_templates"]
 client = ["dep:reqwest", "dep:tracing", "dep:async-recursion"]
 
 [dev-dependencies]

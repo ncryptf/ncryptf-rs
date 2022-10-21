@@ -1,5 +1,5 @@
 use rocket::{Request, Data};
-use rocket::fairing::{Fairing as RocketFairing, Info, Kind};
+use rocket::fairing::{Fairing as rocketairing, Info, Kind};
 use rocket::{
     data::{
         Limits,
@@ -19,7 +19,7 @@ pub struct NcryptfRawBody(pub String);
 pub struct Fairing;
 
 #[rocket::async_trait]
-impl RocketFairing for Fairing {
+impl rocketairing for Fairing {
     fn info(&self) -> Info {
         Info {
             name: "Ncryptf Fairing",

@@ -21,5 +21,35 @@ pub use util::randombytes_buf;
 #[cfg(feature = "rocket")]
 pub mod rocket;
 
+#[cfg(feature = "rocket")]
+pub extern crate rocket as rocketfw;
+
+#[cfg(feature = "rocket")]
+pub extern crate  rocket_db_pools;
+#[cfg(feature = "rocket")]
+pub use rocket_db_pools::*;
+
+#[cfg(feature = "rocket")]
+pub extern crate  rocket_dyn_templates;
+#[cfg(feature = "rocket")]
+pub use rocket_dyn_templates::*;
+
 #[cfg(feature = "client")]
 pub mod client;
+
+#[cfg(feature = "sea-orm")]
+pub extern crate sea_orm;
+#[cfg(feature = "sea-orm")]
+pub use sea_orm::*;
+
+#[cfg(feature = "sea-orm")]
+pub extern crate sea_orm_migration;
+
+#[cfg(feature = "sea-orm")]
+pub use sea_orm_migration::*;
+
+#[cfg(all(feature = "sea-orm", feature = "rocket"))]
+pub extern crate sea_orm_rocket;
+
+#[cfg(all(feature = "sea-orm", feature = "rocket"))]
+pub use sea_orm_rocket::*;
