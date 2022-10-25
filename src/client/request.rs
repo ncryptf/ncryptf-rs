@@ -15,7 +15,9 @@ pub enum RequestError {
     #[error("the argument provided was not one that can be handled")]
     InvalidArgument,
     #[error("the request could not be encrypted")]
-    EncryptionError
+    EncryptionError,
+    #[error("the token provided has expired, and could not be renewed")]
+    TokenExpired
 }
 
 /// The client request simplifies creating, sending, and handling an ncryptf request and response by providing a
@@ -133,6 +135,9 @@ impl Request {
     /// If a token is provided, the request is assumed to require authentication and the appropriate auth header is added
     /// GET requets are assumed to expect an encrypted response
     /// This will bootstrap the encryption process if necessary for an ncryptf encrypted response
+    ///
+    /// AsyncRecursion is to prevent Rust Compiler from detecting a loop - this method is not recursive.
+    #[async_recursion::async_recursion]
     async fn execute(&mut self, method: &str, url: &str, payload: &str) -> Result<crate::client::Response, RequestError> {
         match &self.ek {
             Some(ek) => {
@@ -150,17 +155,42 @@ impl Request {
         };
 
         let auth: Option<crate::Authorization> = match self.token.clone() {
-            Some(token) => match crate::Authorization::from(
-                method.to_string(),
-                url.to_string().clone(),
-                token.clone(),
-                Utc::now(),
-                payload.to_string(),
-                None,
-                None
-            ) {
-                Ok(auth) => Some(auth),
-                Err(_error) => return Err(RequestError::AuthConstructionError)
+            Some(mut token) => {
+                // If the token has, or is nearing expiry, attempt to refresh it
+                let expiration_limit = chrono::Utc::now().timestamp() + 120;
+                if token.expires_at <= expiration_limit {
+                    let refresh_token = token.refresh_token;
+                    // Throw away this token
+                    self.token = None;
+
+                    match self.post(format!("/ncryptf/token/refresh?refresh_token={}", refresh_token).as_str(), "").await {
+                        Ok(response) => match response.status {
+                            reqwest::StatusCode::OK => match response.into::<crate::Token>() {
+                                Ok(tt) => {
+                                    self.token = Some(tt.clone());
+                                    token = tt.clone();
+                                },
+                                Err(_error) => return Err(RequestError::TokenExpired)
+                            },
+                            _ => return Err(RequestError::TokenExpired)
+                        },
+                        Err(_error) => return Err(RequestError::TokenExpired)
+                    };
+                }
+
+                // For requests with tokens, attempt to generate an Authorization struct
+                match crate::Authorization::from(
+                    method.to_string(),
+                    url.to_string().clone(),
+                    token.clone(),
+                    Utc::now(),
+                    payload.to_string(),
+                    None,
+                    None
+                ) {
+                    Ok(auth) => { Some(auth) },
+                    Err(_error) => return Err(RequestError::AuthConstructionError)
+                }
             },
             None => None
         };

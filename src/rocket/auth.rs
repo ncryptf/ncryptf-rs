@@ -71,7 +71,7 @@ macro_rules! auth {
     ($T: ty) => {
         use $crate::rocket::TokenError;
         use $crate::rocket::AuthorizationTrait;
-
+        use $crate::Authorization;
         #[$crate::rocket::async_trait]
         impl<'r>$crate::rocket::request::FromRequest<'r> for $T {
             type Error = TokenError;
@@ -87,7 +87,7 @@ macro_rules! auth {
                     None => return$crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
                 };
 
-                let params = match ncryptf::Authorization::extract_params_from_header_string(header) {
+                let params = match $crate::Authorization::extract_params_from_header_string(header) {
                     Ok(params) => params,
                     Err(_) => return $crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
                 };
