@@ -15,6 +15,7 @@ pub struct RequestSigningPublicKey(pub Vec<u8>);
 
 mod json;
 pub use json::Json;
+pub use json::JsonResponse;
 mod ek;
 pub use ek::EncryptionKey;
 pub use ek::ExportableEncryptionKeyData;
