@@ -32,10 +32,11 @@ async-std = { version = "^1.12", optional = true }
 reqwest = { version = "^0.11", features = ["json", "rustls-tls", "native-tls", "brotli", "gzip", "stream"], optional = true }
 tracing = { version = "^0.1", optional = true }
 async-recursion = { version = "^1.0", optional = true }
-
+anyhow = { version = "^1.0", optional = true }
 sea-orm-migration = { path = "./../sea-orm/sea-orm-migration", features = ["sqlx-mysql",  "runtime-tokio-rustls"], optional = true }
 sea-orm = { path = "./../sea-orm", features = [ "sqlx-mysql", "runtime-tokio-rustls", "macros" ], optional = true }
 sea-orm-rocket = { path = "./../sea-orm/sea-orm-rocket/lib", optional = true }
+
 
 [lib]
 name = "ncryptf"
@@ -43,7 +44,7 @@ name = "ncryptf"
 [features]
 default = []
 sea-orm = ["dep:sea-orm", "dep:sea-orm-migration", "dep:sea-orm-rocket"]
-rocket = ["dep:rocket", "dep:rocket_db_pools", "dep:async-trait", "dep:rocket_dyn_templates"]
+rocket = ["dep:rocket", "dep:rocket_db_pools", "dep:async-trait", "dep:rocket_dyn_templates", "anyhow"]
 client = ["dep:reqwest", "dep:tracing", "dep:async-recursion"]
 
 [dev-dependencies]

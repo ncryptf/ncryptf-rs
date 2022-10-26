@@ -17,6 +17,7 @@ use rocket::{
         Outcome
     }
 };
+use anyhow::anyhow;
 use serde::{Serialize, Deserialize};
 use super::{
     NCRYPTF_CONTENT_TYPE,
@@ -303,89 +304,134 @@ impl<'r, T: Deserialize<'r>> FromData<'r> for Json<T> {
 /// ncryptf versionn
 impl<'r, T: Serialize> Responder<'r, 'static> for Json<T> {
     fn respond_to(self, req: &'r Request<'_>) -> response::Result<'static> {
-         // Handle serialization
-         let message = match serde_json::to_string(&self.0) {
-            Ok(json) => json,
-            Err(_error) => {
-                return Err(Status::InternalServerError);
-            }
-        };
+       match respond_to_with_ncryptf(self, Status::Ok, req) {
+            Ok(response) => response,
+            Err(_) => return Err(Status::InternalServerError)
+        }
+    }
+}
 
-        match req.headers().get_one("Accept") {
-            Some(accept) => {
-                match accept {
-                    NCRYPTF_CONTENT_TYPE => {
-                        // Retrieve the client public key
-                        let cpk = req.local_cache(|| {
-                            return RequestPublicKey(Vec::<u8>::new());
-                        });
+/// ncryptf::rocket::JsonResponse is identical to ncryptf::rocket::Json<T> except that is also supports setting
+/// a status code on the response.
+///
+/// You may find this useful for:
+///     - Returning an common JSON structure for parsing in another clients / application
+///     - Returning an error struct if your request is not successful to inform the client on steps they can
+///        perform to resolve the error
+///
+/// The response with JsonResponse<T> will be identical to Json<T>. See Json<T> for more information
+#[derive(Debug, Clone)]
+pub struct JsonResponse<T> {
+    pub status: Status,
+    pub json: Json<T>
+}
 
-                        let pk: Vec<u8>;
-                        // If the cache data is empty, check the header as a fallback
-                        if cpk.0.is_empty() {
-                            pk = match req.headers().get_one("X-PubKey") {
-                                Some(h) => base64::decode(h).unwrap(),
-                                // If the header isn't sent, then we have no way to encrypt a response the client can use
-                                None => { return Err(Status::BadRequest); }
-                            };
-                        } else {
-                            pk = cpk.0.clone();
-                        }
+impl<'r, T: Serialize> Responder<'r, 'static> for JsonResponse<T> {
+    fn respond_to(self, req: &'r Request<'_>) -> response::Result<'static> {
+        match respond_to_with_ncryptf(self.json, self.status, req) {
+            Ok(response) => response,
+            Err(_) => return Err(Status::InternalServerError)
+        }
+    }
+}
 
-                        let ek = EncryptionKey::new(false);
-                        let d = serde_json::to_string(&ek).unwrap();
+fn respond_to_with_ncryptf<'r, 'a, T: serde::Serialize>(message: Json<T>, status: Status, req: &'r Request<'_>) -> Result<response::Result<'static>, anyhow::Error> {
+    // Handle serialization
+    let message = match serde_json::to_string(&message.0) {
+        Ok(json) => json,
+        Err(_error) =>  return Err(anyhow!("Could not deserialize message"))
+    };
 
-                         // Create an encryption key then store it in Redis
-                        // The client can choose to use the new key or ignore it, but we're always going to provide our own for each request
-                        let mut conn: rocket_db_pools::deadpool_redis::redis::Connection = match get_cache(req) {
-                            Ok(conn) => conn,
-                            Err(_error) => return Err(Status::InternalServerError)
+    match req.headers().get_one("Accept") {
+        Some(accept) => {
+            match accept {
+                NCRYPTF_CONTENT_TYPE => {
+                    // Retrieve the client public key
+                    let cpk = req.local_cache(|| {
+                        return RequestPublicKey(Vec::<u8>::new());
+                    });
+
+                    let pk: Vec<u8>;
+                    // If the cache data is empty, check the header as a fallback
+                    if cpk.0.is_empty() {
+                        pk = match req.headers().get_one("X-PubKey") {
+                            Some(h) => base64::decode(h).unwrap(),
+                            // If the header isn't sent, then we have no way to encrypt a response the client can use
+                            None =>return Err(anyhow!("Public key is not available on request. Unable to re-encrypt message to client."))
                         };
-
-                        match conn.set_ex(ek.get_hash_id(), d, 3600) {
-                            Ok(r) => r,
-                            Err(_) => {}
-                        };
-
-                        let mut request = match crate::Request::from(
-                            ek.get_box_kp().get_secret_key(),
-                            // todo!() we should pull out the token signature, if it is set and use it
-                            ek.get_sign_kp().get_secret_key()
-                        ) {
-                            Ok(request) => request,
-                            Err(_error) => return Err(Status::InternalServerError)
-                        };
-
-                        let content = match request.encrypt(message, pk) {
-                            Ok(content) => content,
-                            Err(_error) => return Err(Status::InternalServerError)
-                        };
-
-                        let d = base64::encode(content);
-
-                        return Response::build_from(d.respond_to(req)?)
-                            .header(ContentType::new("application", "vnd.ncryptf+json"))
-                            .header(Header::new("x-public-key", base64::encode(ek.get_box_kp().get_public_key())))
-                            .header(Header::new("x-signature-public-key", base64::encode(ek.get_sign_kp().get_public_key())))
-                            .header(Header::new("x-public-key-expiration", ek.expires_at.to_string()))
-                            .header(Header::new("x-hashid", ek.get_hash_id()))
-                            .ok()
-                    },
-                    _ => {
-                        // Default to a JSON response if the content type is not an ncryptf content type
-                        // This is compatible with other implementations of ncryptf
-                        return Response::build_from(message.respond_to(req)?)
-                            .header(ContentType::new("application", "json"))
-                            .ok()
+                    } else {
+                        pk = cpk.0.clone();
                     }
+
+                    let ek = EncryptionKey::new(false);
+                    let d = serde_json::to_string(&ek).unwrap();
+
+                        // Create an encryption key then store it in Redis
+                    // The client can choose to use the new key or ignore it, but we're always going to provide our own for each request
+                    let mut conn: rocket_db_pools::deadpool_redis::redis::Connection = match get_cache(req) {
+                        Ok(conn) => conn,
+                        Err(_error) => return Err(anyhow!("Unable to connect to Redis."))
+                    };
+
+                    match conn.set_ex(ek.get_hash_id(), d, 3600) {
+                        Ok(r) => r,
+                        Err(_) => {}
+                    };
+
+                    let mut request = match crate::Request::from(
+                        ek.get_box_kp().get_secret_key(),
+                        // todo!() we should pull out the token signature, if it is set and use it
+                        ek.get_sign_kp().get_secret_key()
+                    ) {
+                        Ok(request) => request,
+                        Err(_error) => return Err(anyhow!("Unable to encrypt message"))
+                    };
+
+                    let content = match request.encrypt(message, pk) {
+                        Ok(content) => content,
+                        Err(_error) => return Err(anyhow!("Unable to encrypt message"))
+                    };
+
+                    let d = base64::encode(content);
+
+                    let respond_to = match d.respond_to(req) {
+                        Ok(s) => s,
+                        Err(_) =>  return Err(anyhow!("Could not send response"))
+                    };
+
+                    return Ok(Response::build_from(respond_to)
+                        .header(ContentType::new("application", "vnd.ncryptf+json"))
+                        .header(Header::new("x-public-key", base64::encode(ek.get_box_kp().get_public_key())))
+                        .header(Header::new("x-signature-public-key", base64::encode(ek.get_sign_kp().get_public_key())))
+                        .header(Header::new("x-public-key-expiration", ek.expires_at.to_string()))
+                        .header(Header::new("x-hashid", ek.get_hash_id()))
+                        .status(status)
+                        .ok());
+                },
+                _ => {
+                    let respond_to = match message.respond_to(req) {
+                        Ok(s) => s,
+                        Err(_) =>  return Err(anyhow!("Could not send response"))
+                    };
+                    // Default to a JSON response if the content type is not an ncryptf content type
+                    // This is compatible with other implementations of ncryptf
+                    return Ok(Response::build_from(respond_to)
+                        .header(ContentType::new("application", "json"))
+                        .status(status).ok());
                 }
-            },
-            None => {
-                // If an Accept is not defined on the request, return JSON when this struct is requested
-                return Response::build_from(message.respond_to(req)?)
-                    .header(ContentType::new("application", "json"))
-                    .ok()
             }
+        },
+        None => {
+            let respond_to = match message.respond_to(req) {
+                Ok(s) => s,
+                Err(_) =>  return Err(anyhow!("Could not send response"))
+            };
+
+            // If an Accept is not defined on the request, return JSON when this struct is requested
+            return Ok(Response::build_from(respond_to)
+                .header(ContentType::new("application", "json"))
+                .status(status)
+                .ok());
         }
     }
 }
