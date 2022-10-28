@@ -328,16 +328,16 @@ pub struct JsonResponse<T> {
 
 impl<'r, T: Serialize> Responder<'r, 'static> for JsonResponse<T> {
     fn respond_to(self, req: &'r Request<'_>) -> response::Result<'static> {
-        match respond_to_with_ncryptf(self.json, self.status, req) {
+        return match respond_to_with_ncryptf(self.json, self.status, req) {
             Ok(response) => response,
             Err(_) => return Err(Status::InternalServerError)
         }
     }
 }
 
-fn respond_to_with_ncryptf<'r, 'a, T: serde::Serialize>(message: Json<T>, status: Status, req: &'r Request<'_>) -> Result<response::Result<'static>, anyhow::Error> {
+fn respond_to_with_ncryptf<'r, 'a, T: serde::Serialize>(m: Json<T>, status: Status, req: &'r Request<'_>) -> Result<response::Result<'static>, anyhow::Error> {
     // Handle serialization
-    let message = match serde_json::to_string(&message.0) {
+    let message = match serde_json::to_string(&m.0) {
         Ok(json) => json,
         Err(_error) =>  return Err(anyhow!("Could not deserialize message"))
     };
