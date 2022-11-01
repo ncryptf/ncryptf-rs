@@ -43,7 +43,7 @@ pub enum RequestError {
 /// > NOTE: Only GET, DELETE, POST, and PUT verbs are supported for this client library -- you likely do not need to have an encrypted HEAD, or OPTIONS for an API.
 ///
 /// An `ncryptf::Client::Response` is emitted on success. The response automatically handles decrypting the response for your application.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Request {
     pub client: reqwest::Client,
     pub endpoint: String,

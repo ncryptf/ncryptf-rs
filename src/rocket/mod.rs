@@ -14,7 +14,7 @@ pub struct RequestPublicKey(pub Vec<u8>);
 pub struct RequestSigningPublicKey(pub Vec<u8>);
 
 mod json;
-pub use json::Json;
+pub use json::{Json, Error as JsonError, respond_to_with_ncryptf};
 pub use json::JsonResponse;
 mod ek;
 pub use ek::EncryptionKey;

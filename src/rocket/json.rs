@@ -335,7 +335,7 @@ impl<'r, T: Serialize> Responder<'r, 'static> for JsonResponse<T> {
     }
 }
 
-fn respond_to_with_ncryptf<'r, 'a, T: serde::Serialize>(m: Json<T>, status: Status, req: &'r Request<'_>) -> Result<response::Result<'static>, anyhow::Error> {
+pub fn respond_to_with_ncryptf<'r, 'a, T: serde::Serialize>(m: Json<T>, status: Status, req: &'r Request<'_>) -> Result<response::Result<'static>, anyhow::Error> {
     // Handle serialization
     let message = match serde_json::to_string(&m.0) {
         Ok(json) => json,
