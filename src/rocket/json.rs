@@ -1,32 +1,17 @@
-use std::{io, fmt, error};
+use std::{error, fmt, io};
 
-use rocket::{
-    response::{
-        Response,
-        Responder,
-        self
-    },
-    Request, http::{
-        ContentType,
-        Status, Header
-    },
-    Data,
-    data::{
-        Limits,
-        FromData,
-        Outcome
-    }
+use super::{
+    fairing::FairingConsumed, get_cache, EncryptionKey, RequestPublicKey, RequestSigningPublicKey,
+    NCRYPTF_CONTENT_TYPE,
 };
 use anyhow::anyhow;
-use serde::{Serialize, Deserialize};
-use super::{
-    NCRYPTF_CONTENT_TYPE,
-    EncryptionKey,
-    RequestSigningPublicKey,
-    RequestPublicKey,
-    fairing::FairingConsumed,
-    get_cache
+use rocket::{
+    data::{FromData, Limits, Outcome},
+    http::{ContentType, Header, Status},
+    response::{self, Responder, Response},
+    Data, Request,
 };
+use serde::{Deserialize, Serialize};
 
 #[allow(unused_imports)] // for rust-analyzer
 use rocket_db_pools::deadpool_redis::redis::Commands;
@@ -119,16 +104,20 @@ impl<T> Json<T> {
     }
 
     /// Deserializes the request sting into a raw JSON string
-    pub fn deserialize_req_from_string<'r>(req: &'r Request<'_>, string: String) -> Result<String, Error<'r>>{
+    pub fn deserialize_req_from_string<'r>(
+        req: &'r Request<'_>,
+        string: String,
+    ) -> Result<String, Error<'r>> {
         match req.headers().get_one("Content-Type") {
             Some(h) => {
                 match h {
                     NCRYPTF_CONTENT_TYPE => {
                         // Retrieve the redis connection
-                        let mut conn: rocket_db_pools::deadpool_redis::redis::Connection = match get_cache(req) {
-                            Ok(conn) => conn,
-                            Err(error) => return Err(error)
-                        };
+                        let mut conn: rocket_db_pools::deadpool_redis::redis::Connection =
+                            match get_cache(req) {
+                                Ok(conn) => conn,
+                                Err(error) => return Err(error),
+                            };
 
                         // Convert the base64 payload into Vec<u8>
                         let data = base64::decode(string).unwrap();
@@ -137,25 +126,34 @@ impl<T> Json<T> {
                         let hash_id = match req.headers().get_one("X-HashId") {
                             Some(h) => h,
                             None => {
-                                return Err(Error::Io(io::Error::new(io::ErrorKind::Other, "Missing client provided hash identifier.")));
+                                return Err(Error::Io(io::Error::new(
+                                    io::ErrorKind::Other,
+                                    "Missing client provided hash identifier.",
+                                )));
                             }
                         };
 
                         // Retrive the JSON struct for the encryption key
                         let json = match conn.get(hash_id) {
                             Ok(k) => k,
-                            Err(_error) => "".to_string()
+                            Err(_error) => "".to_string(),
                         };
 
                         if json.is_empty() {
-                            return Err(Error::Io(io::Error::new(io::ErrorKind::Other, "Encryption key is either invalid, or may have expired.")));
+                            return Err(Error::Io(io::Error::new(
+                                io::ErrorKind::Other,
+                                "Encryption key is either invalid, or may have expired.",
+                            )));
                         }
 
                         // Deserialize the encryption key into a useful struct
                         let ek: EncryptionKey = match serde_json::from_str(&json) {
                             Ok(ek) => ek,
                             Err(_error) => {
-                                return Err(Error::Io(io::Error::new(io::ErrorKind::Other, "Encryption key is either invalid, or may have expired.")));
+                                return Err(Error::Io(io::Error::new(
+                                    io::ErrorKind::Other,
+                                    "Encryption key is either invalid, or may have expired.",
+                                )));
                             }
                         };
 
@@ -178,20 +176,32 @@ impl<T> Json<T> {
                                 // won't let us read the request
                                 match crate::Response::get_public_key_from_response(data.clone()) {
                                     Ok(cpk) => {
-                                        req.local_cache(|| { return RequestPublicKey(cpk.clone()); });
-                                    },
+                                        req.local_cache(|| {
+                                            return RequestPublicKey(cpk.clone());
+                                        });
+                                    }
                                     Err(error) => {
-                                        return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
+                                        return Err(Error::Io(io::Error::new(
+                                            io::ErrorKind::Other,
+                                            error.to_string(),
+                                        )));
                                     }
                                 };
 
                                 // Extract the signature key
-                                match crate::Response::get_signing_public_key_from_response(data.clone()) {
+                                match crate::Response::get_signing_public_key_from_response(
+                                    data.clone(),
+                                ) {
                                     Ok(cpk) => {
-                                        req.local_cache(|| { return RequestSigningPublicKey(cpk.clone()); });
-                                    },
+                                        req.local_cache(|| {
+                                            return RequestSigningPublicKey(cpk.clone());
+                                        });
+                                    }
                                     Err(error) => {
-                                        return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
+                                        return Err(Error::Io(io::Error::new(
+                                            io::ErrorKind::Other,
+                                            error.to_string(),
+                                        )));
                                     }
                                 };
 
@@ -199,45 +209,47 @@ impl<T> Json<T> {
                                 // If they are set they assume priority, and response.decrypt will likely decrypt this as a V1 response
                                 let public_key = match req.headers().get_one("X-PubKey") {
                                     Some(h) => Some(h.as_bytes().to_vec()),
-                                    None => None
+                                    None => None,
                                 };
 
                                 let nonce = match req.headers().get_one("X-Nonce") {
                                     Some(h) => Some(h.as_bytes().to_vec()),
-                                    None => None
+                                    None => None,
                                 };
 
                                 // Decrypt the request
-                                match response.decrypt(
-                                    data.clone(),
-                                    public_key,
-                                    nonce
-                                ) {
+                                match response.decrypt(data.clone(), public_key, nonce) {
                                     Ok(msg) => {
                                         // Serialize this into a struct, and store the decrypted response in the cache
                                         // We'll need this for the Authorization header
-                                         return Ok(req.local_cache(|| return msg).to_owned());
-                                    },
-                                    Err(error) =>{
-                                        return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
+                                        return Ok(req.local_cache(|| return msg).to_owned());
+                                    }
+                                    Err(error) => {
+                                        return Err(Error::Io(io::Error::new(
+                                            io::ErrorKind::Other,
+                                            error.to_string(),
+                                        )));
                                     }
                                 };
-                            },
-                            Err(error) =>{
-                                return Err(Error::Io(io::Error::new(io::ErrorKind::Other, error.to_string())));
+                            }
+                            Err(error) => {
+                                return Err(Error::Io(io::Error::new(
+                                    io::ErrorKind::Other,
+                                    error.to_string(),
+                                )));
                             }
                         };
-                    },
+                    }
                     // If this is a json request, return raw json
                     "json" => {
                         return Ok(req.local_cache(|| return string).to_owned());
-                    },
+                    }
                     // For now, return JSON even if another header was sent.
                     _ => {
                         return Ok(req.local_cache(|| return string).to_owned());
                     }
                 }
-            },
+            }
             // If there isn't an Accept header, also return JSON
             None => {
                 return Ok(req.local_cache(|| return string).to_owned());
@@ -248,7 +260,9 @@ impl<T> Json<T> {
 
 impl<'r, T: Deserialize<'r>> Json<T> {
     fn from_str(s: &'r str) -> Result<Self, Error<'r>> {
-        return serde_json::from_str(s).map(Json).map_err(|e| Error::Parse(s, e));
+        return serde_json::from_str(s)
+            .map(Json)
+            .map_err(|e| Error::Parse(s, e));
     }
 
     async fn from_data(req: &'r Request<'_>, data: Data<'r>) -> Result<Self, Error<'r>> {
@@ -263,15 +277,15 @@ impl<'r, T: Deserialize<'r>> Json<T> {
                     Ok(_) => {
                         let eof = io::ErrorKind::UnexpectedEof;
                         return Err(Error::Io(io::Error::new(eof, "data limit exceeded")));
-                    },
+                    }
                     Err(error) => return Err(Error::Io(error)),
                 };
 
                 match Self::deserialize_req_from_string(req, string) {
-                    Ok(s) =>{
+                    Ok(s) => {
                         return Self::from_str(req.local_cache(|| return s));
-                    },
-                    Err(error) => return Err(error)
+                    }
+                    Err(error) => return Err(error),
                 };
             }
         };
@@ -287,13 +301,13 @@ impl<'r, T: Deserialize<'r>> FromData<'r> for Json<T> {
             Ok(value) => Outcome::Success(value),
             Err(Error::Io(e)) if e.kind() == io::ErrorKind::UnexpectedEof => {
                 Outcome::Failure((Status::PayloadTooLarge, Error::Io(e)))
-            },
+            }
             Err(Error::Parse(s, e)) if e.classify() == serde_json::error::Category::Data => {
                 let sttr = req.local_cache(|| return "".to_string());
                 dbg!(sttr);
                 dbg!(e.to_string());
                 Outcome::Failure((Status::UnprocessableEntity, Error::Parse(s, e)))
-            },
+            }
             Err(e) => Outcome::Failure((Status::BadRequest, e)),
         }
     }
@@ -304,9 +318,9 @@ impl<'r, T: Deserialize<'r>> FromData<'r> for Json<T> {
 /// ncryptf versionn
 impl<'r, T: Serialize> Responder<'r, 'static> for Json<T> {
     fn respond_to(self, req: &'r Request<'_>) -> response::Result<'static> {
-       match respond_to_with_ncryptf(self, Status::Ok, req) {
+        match respond_to_with_ncryptf(self, Status::Ok, req) {
             Ok(response) => response,
-            Err(_) => return Err(Status::InternalServerError)
+            Err(_) => return Err(Status::InternalServerError),
         }
     }
 }
@@ -323,23 +337,27 @@ impl<'r, T: Serialize> Responder<'r, 'static> for Json<T> {
 #[derive(Debug, Clone)]
 pub struct JsonResponse<T> {
     pub status: Status,
-    pub json: Json<T>
+    pub json: Json<T>,
 }
 
 impl<'r, T: Serialize> Responder<'r, 'static> for JsonResponse<T> {
     fn respond_to(self, req: &'r Request<'_>) -> response::Result<'static> {
         return match respond_to_with_ncryptf(self.json, self.status, req) {
             Ok(response) => response,
-            Err(_) => return Err(Status::InternalServerError)
-        }
+            Err(_) => return Err(Status::InternalServerError),
+        };
     }
 }
 
-pub fn respond_to_with_ncryptf<'r, 'a, T: serde::Serialize>(m: Json<T>, status: Status, req: &'r Request<'_>) -> Result<response::Result<'static>, anyhow::Error> {
+pub fn respond_to_with_ncryptf<'r, 'a, T: serde::Serialize>(
+    m: Json<T>,
+    status: Status,
+    req: &'r Request<'_>,
+) -> Result<response::Result<'static>, anyhow::Error> {
     // Handle serialization
     let message = match serde_json::to_string(&m.0) {
         Ok(json) => json,
-        Err(_error) =>  return Err(anyhow!("Could not deserialize message"))
+        Err(_error) => return Err(anyhow!("Could not deserialize message")),
     };
 
     match req.headers().get_one("Accept") {
@@ -366,12 +384,13 @@ pub fn respond_to_with_ncryptf<'r, 'a, T: serde::Serialize>(m: Json<T>, status: 
                     let ek = EncryptionKey::new(false);
                     let d = serde_json::to_string(&ek).unwrap();
 
-                        // Create an encryption key then store it in Redis
+                    // Create an encryption key then store it in Redis
                     // The client can choose to use the new key or ignore it, but we're always going to provide our own for each request
-                    let mut conn: rocket_db_pools::deadpool_redis::redis::Connection = match get_cache(req) {
-                        Ok(conn) => conn,
-                        Err(_error) => return Err(anyhow!("Unable to connect to Redis."))
-                    };
+                    let mut conn: rocket_db_pools::deadpool_redis::redis::Connection =
+                        match get_cache(req) {
+                            Ok(conn) => conn,
+                            Err(_error) => return Err(anyhow!("Unable to connect to Redis.")),
+                        };
 
                     match conn.set_ex(ek.get_hash_id(), d, 3600) {
                         Ok(r) => r,
@@ -381,50 +400,60 @@ pub fn respond_to_with_ncryptf<'r, 'a, T: serde::Serialize>(m: Json<T>, status: 
                     let mut request = match crate::Request::from(
                         ek.get_box_kp().get_secret_key(),
                         // todo!() we should pull out the token signature, if it is set and use it
-                        ek.get_sign_kp().get_secret_key()
+                        ek.get_sign_kp().get_secret_key(),
                     ) {
                         Ok(request) => request,
-                        Err(_error) => return Err(anyhow!("Unable to encrypt message"))
+                        Err(_error) => return Err(anyhow!("Unable to encrypt message")),
                     };
 
                     let content = match request.encrypt(message, pk) {
                         Ok(content) => content,
-                        Err(_error) => return Err(anyhow!("Unable to encrypt message"))
+                        Err(_error) => return Err(anyhow!("Unable to encrypt message")),
                     };
 
                     let d = base64::encode(content);
 
                     let respond_to = match d.respond_to(req) {
                         Ok(s) => s,
-                        Err(_) =>  return Err(anyhow!("Could not send response"))
+                        Err(_) => return Err(anyhow!("Could not send response")),
                     };
 
                     return Ok(Response::build_from(respond_to)
                         .header(ContentType::new("application", "vnd.ncryptf+json"))
-                        .header(Header::new("x-public-key", base64::encode(ek.get_box_kp().get_public_key())))
-                        .header(Header::new("x-signature-public-key", base64::encode(ek.get_sign_kp().get_public_key())))
-                        .header(Header::new("x-public-key-expiration", ek.expires_at.to_string()))
+                        .header(Header::new(
+                            "x-public-key",
+                            base64::encode(ek.get_box_kp().get_public_key()),
+                        ))
+                        .header(Header::new(
+                            "x-signature-public-key",
+                            base64::encode(ek.get_sign_kp().get_public_key()),
+                        ))
+                        .header(Header::new(
+                            "x-public-key-expiration",
+                            ek.expires_at.to_string(),
+                        ))
                         .header(Header::new("x-hashid", ek.get_hash_id()))
                         .status(status)
                         .ok());
-                },
+                }
                 _ => {
                     let respond_to = match message.respond_to(req) {
                         Ok(s) => s,
-                        Err(_) =>  return Err(anyhow!("Could not send response"))
+                        Err(_) => return Err(anyhow!("Could not send response")),
                     };
                     // Default to a JSON response if the content type is not an ncryptf content type
                     // This is compatible with other implementations of ncryptf
                     return Ok(Response::build_from(respond_to)
                         .header(ContentType::new("application", "json"))
-                        .status(status).ok());
+                        .status(status)
+                        .ok());
                 }
             }
-        },
+        }
         None => {
             let respond_to = match message.respond_to(req) {
                 Ok(s) => s,
-                Err(_) =>  return Err(anyhow!("Could not send response"))
+                Err(_) => return Err(anyhow!("Could not send response")),
             };
 
             // If an Accept is not defined on the request, return JSON when this struct is requested

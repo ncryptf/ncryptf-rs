@@ -1,6 +1,5 @@
-use ncryptf::Response;
-use ncryptf::Request;
-use super::cases::{get_expected_cipher,get_expected_v2_cipher, CData};
+use super::cases::{get_expected_cipher, get_expected_v2_cipher, CData};
+use ncryptf::{Request, Response};
 
 #[test]
 fn test_v1_version() {
@@ -8,7 +7,7 @@ fn test_v1_version() {
         Ok(result) => match result {
             1 => {
                 assert!(true)
-            },
+            }
             _ => {
                 assert!(false)
             }
@@ -25,7 +24,7 @@ fn test_v2_version() {
         Ok(result) => match result {
             2 => {
                 assert!(true)
-            },
+            }
             _ => {
                 assert!(false)
             }
@@ -43,7 +42,7 @@ fn test_public_key_extraction() {
             let c = CData::init();
             let cmp = constant_time_eq::constant_time_eq(&result, &c.client_kp_public.clone());
             assert!(cmp);
-        },
+        }
         Err(_) => {
             assert!(false)
         }
@@ -53,15 +52,17 @@ fn test_public_key_extraction() {
 #[test]
 fn test_sign_and_verify() {
     let c = CData::init();
-     match Request::from(c.client_kp_secret, c.signature_kp_secret) {
+    match Request::from(c.client_kp_secret, c.signature_kp_secret) {
         Ok(request) => {
             let signature = request.sign("".to_string());
 
             assert!(Response::is_signature_valid(
                 "".to_string(),
                 signature.unwrap(),
-                c.signature_kp_public).unwrap());
-        },
+                c.signature_kp_public
+            )
+            .unwrap());
+        }
         _ => {
             assert!(false);
         }

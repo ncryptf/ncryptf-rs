@@ -1,9 +1,7 @@
-use rocket::{Request, Data};
-use rocket::fairing::{Fairing as rocketairing, Info, Kind};
 use rocket::{
-    data::{
-        Limits,
-    }
+    data::Limits,
+    fairing::{Fairing as rocketairing, Info, Kind},
+    Data, Request,
 };
 
 /// Indicates in request.local_cache if the fairing consumed the DataStream or not
@@ -23,7 +21,7 @@ impl rocketairing for Fairing {
     fn info(&self) -> Info {
         Info {
             name: "Ncryptf Fairing",
-            kind: Kind::Request
+            kind: Kind::Request,
         }
     }
 
@@ -50,19 +48,21 @@ impl rocketairing for Fairing {
                             let d = base64::decode(string.clone()).unwrap();
                             match crate::Response::get_version(d) {
                                 Ok(version) => version,
-                                Err(_) => 1
+                                Err(_) => 1,
                             }
-                        },
-                        _ => 2
-                    }
+                        }
+                        _ => 2,
+                    },
                 };
 
                 req.local_cache(|| NcryptfRequestVersion(version));
                 req.local_cache(|| NcryptfRawBody(string.clone()));
-                match crate::rocket::Json::<serde_json::Value>::deserialize_req_from_string(req, string) {
+                match crate::rocket::Json::<serde_json::Value>::deserialize_req_from_string(
+                    req, string,
+                ) {
                     Ok(decrypted) => {
                         req.local_cache(|| return decrypted);
-                    },
+                    }
                     Err(_) => {}
                 }
             };

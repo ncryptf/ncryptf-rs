@@ -1,19 +1,14 @@
 #[doc(hidden)]
-pub use chrono::{Utc, DateTime};
-#[doc(hidden)]
 pub use base64;
+#[doc(hidden)]
+pub use chrono::{DateTime, Utc};
 #[doc(hidden)]
 pub use constant_time_eq;
 #[doc(hidden)]
 pub use rocket::{
     async_trait,
-    request::{
-        self,
-        Request,
-        FromRequest,
-        Outcome
-    },
-    http::Status
+    http::Status,
+    request::{self, FromRequest, Outcome, Request},
 };
 #[doc(hidden)]
 pub use rocket_db_pools::figment::Figment;
@@ -23,7 +18,7 @@ pub use rocket_db_pools::figment::Figment;
 pub enum TokenError {
     InvalidToken,
     SignatureInvalid,
-    ServerError
+    ServerError,
 }
 
 /// AuthorizationTrait is a trait that should be implemented by your User entity.
@@ -32,12 +27,18 @@ pub enum TokenError {
 #[async_trait::async_trait]
 pub trait AuthorizationTrait: Sync + Send + 'static {
     /// Returns a ncryptf::Token instance given an access_token. The `databases.*` figment is provided to construct the relevant database connections as needed to process this request.
-    async fn get_token_from_access_token(access_token: String, figment: Figment) -> Result<crate::Token, TokenError>;
+    async fn get_token_from_access_token(
+        access_token: String,
+        figment: Figment,
+    ) -> Result<crate::Token, TokenError>;
 
     /// Returns a <Self> (User) entity given a specific token
     /// You can use this method to determine the appropriate access credentials, scoping, and permissions.
     /// The `databases.*` figment is provided to construct the relevant database connections as needed to process this request.
-    async fn get_user_from_token(token: crate::Token, figment: Figment) -> Result<Box<Self>, TokenError>;
+    async fn get_user_from_token(
+        token: crate::Token,
+        figment: Figment,
+    ) -> Result<Box<Self>, TokenError>;
 }
 
 /// The ncryptf::auth!() macro provides the appropriate generic implementation details of FromRequest to allow User entities to be returned

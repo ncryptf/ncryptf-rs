@@ -1,7 +1,6 @@
-use serde::{Deserialize, Serialize};
-use crate::Keypair;
-use crate::Signature;
+use crate::{Keypair, Signature};
 use rand::{distributions::Alphanumeric, Rng};
+use serde::{Deserialize, Serialize};
 
 /// Reusable encryption key data for client parsing
 ///
@@ -12,7 +11,7 @@ pub struct ExportableEncryptionKeyData {
     pub signature: String,
     pub hash_id: String,
     pub expires_at: i64,
-    pub ephemeral: bool
+    pub ephemeral: bool,
 }
 
 impl ExportableEncryptionKeyData {
@@ -47,7 +46,7 @@ pub struct EncryptionKey {
     skp: Keypair,
     ephemeral: bool,
     pub expires_at: i64,
-    hash_id: String
+    hash_id: String,
 }
 
 impl EncryptionKey {
@@ -97,8 +96,8 @@ impl EncryptionKey {
             skp: Signature::new(),
             ephemeral: ephemeral,
             expires_at: expiration.timestamp(),
-            hash_id: s
-        }
+            hash_id: s,
+        };
     }
 }
 
@@ -150,37 +149,36 @@ impl EncryptionKey {
 #[macro_export]
 macro_rules! ek_route {
     ($T: ty) => {
-            use rocket::get;
-            use rocket::http::Status;
-            use rocket_db_pools::Database;
-            use rocket_db_pools::Connection as RedisConnection;
-            #[allow(unused_imports)] // for rust-analyzer
-            use rocket_db_pools::deadpool_redis::redis::AsyncCommands;
+        use rocket::{get, http::Status};
+        #[allow(unused_imports)] // for rust-analyzer
+        use rocket_db_pools::deadpool_redis::redis::AsyncCommands;
+        use rocket_db_pools::{Connection as RedisConnection, Database};
 
-            use serde::{Deserialize, Serialize};
-            use ncryptf::rocket::{EncryptionKey, ExportableEncryptionKeyData};
+        use ncryptf::rocket::{EncryptionKey, ExportableEncryptionKeyData};
+        use serde::{Deserialize, Serialize};
 
-            #[get("/ek")]
-            pub async fn ncryptf_ek_route( rdb: RedisConnection<$T>) -> Result<ncryptf::rocket::Json<ExportableEncryptionKeyData>, Status> {
-                let ek = EncryptionKey::new(true);
-                let mut redis: rocket_db_pools::deadpool_redis::Connection = rdb.into_inner();
+        #[get("/ek")]
+        pub async fn ncryptf_ek_route(
+            rdb: RedisConnection<$T>,
+        ) -> Result<ncryptf::rocket::Json<ExportableEncryptionKeyData>, Status> {
+            let ek = EncryptionKey::new(true);
+            let mut redis: rocket_db_pools::deadpool_redis::Connection = rdb.into_inner();
 
-                let _result = match redis.set_ex(
-                    ek.get_hash_id(),
-                    serde_json::to_string(&ek).unwrap(),
-                    3600
-                ).await {
-                    Ok(result) => result,
-                    Err(_) => return Err(Status::InternalServerError)
-                };
+            let _result = match redis
+                .set_ex(ek.get_hash_id(), serde_json::to_string(&ek).unwrap(), 3600)
+                .await
+            {
+                Ok(result) => result,
+                Err(_) => return Err(Status::InternalServerError),
+            };
 
-                return Ok(ncryptf::rocket::Json(ExportableEncryptionKeyData {
-                    public: base64::encode(ek.get_box_kp().get_public_key()),
-                    signature: base64::encode(ek.get_sign_kp().get_public_key()),
-                    hash_id: ek.get_hash_id(),
-                    ephemeral: true,
-                    expires_at: ek.expires_at
-                }));
-            }
+            return Ok(ncryptf::rocket::Json(ExportableEncryptionKeyData {
+                public: base64::encode(ek.get_box_kp().get_public_key()),
+                signature: base64::encode(ek.get_sign_kp().get_public_key()),
+                hash_id: ek.get_hash_id(),
+                ephemeral: true,
+                expires_at: ek.expires_at,
+            }));
         }
-    }
+    };
+}

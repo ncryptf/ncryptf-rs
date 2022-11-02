@@ -1,6 +1,6 @@
 use chrono::Utc;
-use thiserror::Error;
 use reqwest::header::{HeaderMap, HeaderValue};
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum RequestError {
@@ -17,7 +17,7 @@ pub enum RequestError {
     #[error("the request could not be encrypted")]
     EncryptionError,
     #[error("the token provided has expired, and could not be renewed")]
-    TokenExpired
+    TokenExpired,
 }
 
 /// The client request simplifies creating, sending, and handling an ncryptf request and response by providing a
@@ -48,7 +48,7 @@ pub struct Request {
     pub client: reqwest::Client,
     pub endpoint: String,
     pub token: Option<crate::Token>,
-    ek: Option<crate::rocket::ExportableEncryptionKeyData>
+    ek: Option<crate::rocket::ExportableEncryptionKeyData>,
 }
 
 impl Request {
@@ -58,7 +58,7 @@ impl Request {
             client,
             endpoint: endpoint.to_string(),
             token,
-            ek: None
+            ek: None,
         }
     }
 
@@ -74,39 +74,50 @@ impl Request {
     pub async fn rekey(&mut self, hashid: Option<String>) -> Result<bool, RequestError> {
         let kp = crate::Keypair::new();
         let mut headers = HeaderMap::new();
-        headers.insert("Content-Type", HeaderValue::from_str(&"application/json").unwrap());
+        headers.insert(
+            "Content-Type",
+            HeaderValue::from_str(&"application/json").unwrap(),
+        );
 
         match hashid.clone() {
             Some(hashid) => {
-                headers.insert("Accept", HeaderValue::from_str(&"application/vnd.ncryptf+json").unwrap());
+                headers.insert(
+                    "Accept",
+                    HeaderValue::from_str(&"application/vnd.ncryptf+json").unwrap(),
+                );
                 headers.insert("X-HashId", HeaderValue::from_str(&hashid).unwrap());
                 let pk = base64::encode(kp.get_public_key());
                 headers.insert("X-PubKey", HeaderValue::from_str(&pk).unwrap());
-            },
+            }
             _ => {
-                headers.insert("Accept", HeaderValue::from_str(&"application/json").unwrap());
+                headers.insert(
+                    "Accept",
+                    HeaderValue::from_str(&"application/json").unwrap(),
+                );
             }
         };
 
         let furi = format!("{}{}", self.endpoint, "/ncryptf/ek");
-        let builder = self.client.clone().get(furi)
-            .headers(headers);
+        let builder = self.client.clone().get(furi).headers(headers);
 
         match self.do_request(builder, kp).await {
             Ok(response) => match response.status {
-                reqwest::StatusCode::OK => match serde_json::from_str::<crate::rocket::ExportableEncryptionKeyData>(&response.body.unwrap()) {
+                reqwest::StatusCode::OK => match serde_json::from_str::<
+                    crate::rocket::ExportableEncryptionKeyData,
+                >(&response.body.unwrap())
+                {
                     Ok(ek) => {
                         self.ek = Some(ek.clone());
                         match hashid.clone() {
                             Some(_) => return Ok(true),
-                            _ => return self.rekey(Some(ek.hash_id)).await
+                            _ => return self.rekey(Some(ek.hash_id)).await,
                         }
-                    },
-                    Err(_error) => return Err(RequestError::ReKeyError)
-                }
-                _ => return Err(RequestError::ReKeyError)
+                    }
+                    Err(_error) => return Err(RequestError::ReKeyError),
+                },
+                _ => return Err(RequestError::ReKeyError),
             },
-            Err(_error) => return Err(RequestError::ReKeyError)
+            Err(_error) => return Err(RequestError::ReKeyError),
         };
     }
 
@@ -121,12 +132,20 @@ impl Request {
     }
 
     /// Performs an HTTP POST request
-    pub async fn post(&mut self, url: &str, payload: &str) -> Result<crate::client::Response, RequestError> {
+    pub async fn post(
+        &mut self,
+        url: &str,
+        payload: &str,
+    ) -> Result<crate::client::Response, RequestError> {
         return self.execute("POST", url, payload).await;
     }
 
     /// Performs an HTTP PUT request
-    pub async fn put(&mut self, url: &str, payload: &str) -> Result<crate::client::Response, RequestError> {
+    pub async fn put(
+        &mut self,
+        url: &str,
+        payload: &str,
+    ) -> Result<crate::client::Response, RequestError> {
         return self.execute("PUT", url, payload).await;
     }
 
@@ -138,20 +157,25 @@ impl Request {
     ///
     /// AsyncRecursion is to prevent Rust Compiler from detecting a loop - this method is not recursive.
     #[async_recursion::async_recursion]
-    async fn execute(&mut self, method: &str, url: &str, payload: &str) -> Result<crate::client::Response, RequestError> {
+    async fn execute(
+        &mut self,
+        method: &str,
+        url: &str,
+        payload: &str,
+    ) -> Result<crate::client::Response, RequestError> {
         match &self.ek {
             Some(ek) => {
                 if ek.is_expired() {
                     match self.rekey(None).await {
-                        Ok(_) => {},
-                        Err(error) => return Err(error)
+                        Ok(_) => {}
+                        Err(error) => return Err(error),
                     };
                 }
             }
             _ => match self.rekey(None).await {
-                Ok(_) => {},
-                Err(error) => return Err(error)
-            }
+                Ok(_) => {}
+                Err(error) => return Err(error),
+            },
         };
 
         let auth: Option<crate::Authorization> = match self.token.clone() {
@@ -163,18 +187,25 @@ impl Request {
                     // Throw away this token
                     self.token = None;
 
-                    match self.post(format!("/ncryptf/token/refresh?refresh_token={}", refresh_token).as_str(), "").await {
+                    match self
+                        .post(
+                            format!("/ncryptf/token/refresh?refresh_token={}", refresh_token)
+                                .as_str(),
+                            "",
+                        )
+                        .await
+                    {
                         Ok(response) => match response.status {
                             reqwest::StatusCode::OK => match response.into::<crate::Token>() {
                                 Ok(tt) => {
                                     self.token = Some(tt.clone());
                                     token = tt.clone();
-                                },
-                                Err(_error) => return Err(RequestError::TokenExpired)
+                                }
+                                Err(_error) => return Err(RequestError::TokenExpired),
                             },
-                            _ => return Err(RequestError::TokenExpired)
+                            _ => return Err(RequestError::TokenExpired),
                         },
-                        Err(_error) => return Err(RequestError::TokenExpired)
+                        Err(_error) => return Err(RequestError::TokenExpired),
                     };
                 }
 
@@ -186,45 +217,63 @@ impl Request {
                     Utc::now(),
                     payload.to_string(),
                     None,
-                    None
+                    None,
                 ) {
-                    Ok(auth) => { Some(auth) },
-                    Err(_error) => return Err(RequestError::AuthConstructionError)
+                    Ok(auth) => Some(auth),
+                    Err(_error) => return Err(RequestError::AuthConstructionError),
                 }
-            },
-            None => None
+            }
+            None => None,
         };
 
         let kp = crate::Keypair::new();
 
         let mut headers = HeaderMap::new();
-        headers.insert("Accept", HeaderValue::from_str(&"application/vnd.ncryptf+json").unwrap());
+        headers.insert(
+            "Accept",
+            HeaderValue::from_str(&"application/vnd.ncryptf+json").unwrap(),
+        );
         // We always send the headers incase the request don't have a body
-        headers.insert("X-PubKey", HeaderValue::from_str(&base64::encode(kp.get_public_key())).unwrap());
-        headers.insert("X-HashId", HeaderValue::from_str(&self.ek.clone().unwrap().hash_id).unwrap());
+        headers.insert(
+            "X-PubKey",
+            HeaderValue::from_str(&base64::encode(kp.get_public_key())).unwrap(),
+        );
+        headers.insert(
+            "X-HashId",
+            HeaderValue::from_str(&self.ek.clone().unwrap().hash_id).unwrap(),
+        );
 
         match auth {
             Some(auth) => {
-                headers.insert("Authorization", HeaderValue::from_str(auth.get_header().as_str()).unwrap());
+                headers.insert(
+                    "Authorization",
+                    HeaderValue::from_str(auth.get_header().as_str()).unwrap(),
+                );
             }
             _ => {}
         }
 
         let furi = format!("{}{}", self.endpoint, url);
-        let mut builder: reqwest::RequestBuilder =  match method {
-            "GET" =>  self.client.clone().get(furi),
-            "POST" =>  self.client.clone().post(furi),
-            "PUT" =>  self.client.clone().put(furi),
-            "DELETE" =>  self.client.clone().delete(furi),
-            _ => return Err(RequestError::InvalidArgument)
+        let mut builder: reqwest::RequestBuilder = match method {
+            "GET" => self.client.clone().get(furi),
+            "POST" => self.client.clone().post(furi),
+            "PUT" => self.client.clone().put(furi),
+            "DELETE" => self.client.clone().delete(furi),
+            _ => return Err(RequestError::InvalidArgument),
         };
 
         match payload {
             "" => {
-                headers.insert("Content-Type", HeaderValue::from_str(&"application/json").unwrap());
-            },
+                headers.insert(
+                    "Content-Type",
+                    HeaderValue::from_str(&"application/json").unwrap(),
+                );
+            }
             _ => {
-                headers.insert("Content-Type", HeaderValue::from_str(&"application/vnd.ncryptf+json").unwrap());
+                headers.insert(
+                    "Content-Type",
+                    HeaderValue::from_str(&"application/vnd.ncryptf+json").unwrap(),
+                );
                 let sk = match self.token.clone() {
                     Some(token) => token.signature,
                     None => {
@@ -234,11 +283,14 @@ impl Request {
                 };
 
                 let mut request = crate::Request::from(kp.get_secret_key(), sk).unwrap();
-                match request.encrypt(payload.to_string(), self.ek.as_ref().unwrap().clone().get_public_key().unwrap()) {
+                match request.encrypt(
+                    payload.to_string(),
+                    self.ek.as_ref().unwrap().clone().get_public_key().unwrap(),
+                ) {
                     Ok(body) => {
                         builder = builder.body(base64::encode(body));
-                    },
-                    Err(_error) => return Err(RequestError::EncryptionError)
+                    }
+                    Err(_error) => return Err(RequestError::EncryptionError),
                 }
             }
         }
@@ -249,7 +301,11 @@ impl Request {
     }
 
     /// Internal method to perform the http request
-    async fn do_request(&mut self, builder: reqwest::RequestBuilder, kp: crate::Keypair) -> Result<crate::client::Response, RequestError> {
+    async fn do_request(
+        &mut self,
+        builder: reqwest::RequestBuilder,
+        kp: crate::Keypair,
+    ) -> Result<crate::client::Response, RequestError> {
         match builder.send().await {
             Ok(response) => {
                 // If the key is ephemeral or expired, we need to purge it so future requests don't use it
@@ -260,17 +316,29 @@ impl Request {
                     }
                 }
 
-                let result =match crate::client::Response::new(response, kp.get_secret_key()).await {
+                let result = match crate::client::Response::new(response, kp.get_secret_key()).await
+                {
                     Ok(response) => response,
-                    Err(error) => return Err(RequestError::HandlingResponse(error))
+                    Err(error) => return Err(RequestError::HandlingResponse(error)),
                 };
 
                 // Opportunistically update the encryption key headers
                 let hash_id = self.get_header_by_name(result.headers.get("x-hashid"));
-                let expires_at = self.get_header_by_name(result.headers.get("x-public-key-expiration"));
-                let public_key = self.get_key_string_by_result_or_header(result.pk.clone(), result.headers.get("x-public-key"));
-                let signature_key = self.get_key_string_by_result_or_header(result.sk.clone(), result.headers.get("x-signature-key"));
-                if hash_id.is_some() && expires_at.is_some() && public_key.is_some() && signature_key.is_some() {
+                let expires_at =
+                    self.get_header_by_name(result.headers.get("x-public-key-expiration"));
+                let public_key = self.get_key_string_by_result_or_header(
+                    result.pk.clone(),
+                    result.headers.get("x-public-key"),
+                );
+                let signature_key = self.get_key_string_by_result_or_header(
+                    result.sk.clone(),
+                    result.headers.get("x-signature-key"),
+                );
+                if hash_id.is_some()
+                    && expires_at.is_some()
+                    && public_key.is_some()
+                    && signature_key.is_some()
+                {
                     let xp = expires_at.unwrap().parse::<i64>();
                     if xp.is_ok() {
                         self.ek = Some(crate::rocket::ExportableEncryptionKeyData {
@@ -278,19 +346,23 @@ impl Request {
                             signature: signature_key.unwrap(),
                             hash_id: hash_id.unwrap(),
                             ephemeral: false,
-                            expires_at: xp.unwrap()
+                            expires_at: xp.unwrap(),
                         });
                     }
                 }
 
                 return Ok(result);
-            },
-            Err(error) => Err(RequestError::ReqwestError(error))
+            }
+            Err(error) => Err(RequestError::ReqwestError(error)),
         }
     }
 
     /// Helper method to get the key material from either the response body or the headers
-    fn get_key_string_by_result_or_header(&self, key: Option<Vec<u8>>, header: Option<&HeaderValue>) -> Option<String> {
+    fn get_key_string_by_result_or_header(
+        &self,
+        key: Option<Vec<u8>>,
+        header: Option<&HeaderValue>,
+    ) -> Option<String> {
         match key {
             // If we have a key from the response, base64 encode and return it
             Some(key) => Some(base64::encode(key)),
@@ -299,10 +371,10 @@ impl Request {
                 Some(header) => match header.to_str() {
                     // The header will already be base64 encoded, return it directly.
                     Ok(s) => Some(s.to_string()),
-                    Err(_) => None
+                    Err(_) => None,
                 },
-                None => None
-            }
+                None => None,
+            },
         }
     }
 
@@ -311,9 +383,9 @@ impl Request {
         match header {
             Some(h) => match h.to_str() {
                 Ok(s) => Some(s.to_string()),
-                Err(_) => None
+                Err(_) => None,
             },
-            None => None
+            None => None,
         }
     }
 }

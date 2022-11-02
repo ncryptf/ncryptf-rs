@@ -1,6 +1,6 @@
 use libsodium_sys::{
+    crypto_box_PUBLICKEYBYTES as CRYPTO_BOX_PUBLICKEYBYTES,
     crypto_box_SECRETKEYBYTES as CRYPTO_BOX_SECRETKEYBYTES,
-    crypto_box_PUBLICKEYBYTES as CRYPTO_BOX_PUBLICKEYBYTES
 };
 
 use ncryptf::*;

@@ -1,5 +1,7 @@
+use super::cases::{
+    get_date, get_salt, get_test_cases, get_token, get_v1_hmac_headers, get_v2_hmac_headers,
+};
 use ncryptf::*;
-use super::cases::{get_test_cases, get_date, get_salt, get_token, get_v2_hmac_headers, get_v1_hmac_headers};
 
 #[test]
 fn test_v1_hmac() {
@@ -17,7 +19,7 @@ fn test_v1_hmac() {
             date,
             case.payload.clone(),
             Some(salt.clone()),
-            Some(1)
+            Some(1),
         );
 
         assert!(auth.is_ok());
@@ -45,7 +47,7 @@ fn test_v2_hmac() {
             date,
             case.payload.clone(),
             Some(salt.clone()),
-            Some(2)
+            Some(2),
         );
 
         assert!(auth.is_ok());
@@ -72,7 +74,7 @@ fn test_verify_hmac() {
             date,
             case.payload.clone(),
             Some(salt.clone()),
-            Some(2)
+            Some(2),
         );
 
         assert!(auth.is_ok());
@@ -95,14 +97,14 @@ fn test_auth_header_extract() {
         date,
         "".to_string(),
         Some(salt),
-        Some(2)
+        Some(2),
     );
     let header = auth.unwrap().get_header();
     match Authorization::extract_params_from_header_string(header) {
         Ok(params) => {
             let at = params.access_token;
             assert_eq!(token.access_token, at);
-        },
+        }
         Err(error) => {
             dbg!(error);
             assert!(false);

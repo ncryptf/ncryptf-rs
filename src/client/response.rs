@@ -26,18 +26,18 @@ pub struct Response {
     pub headers: reqwest::header::HeaderMap,
     pub body: Option<String>,
     pub pk: Option<Vec<u8>>,
-    pub sk: Option<Vec<u8>>
+    pub sk: Option<Vec<u8>>,
 }
 
 impl Response {
     /// Constructs a new response
     pub async fn new(response: reqwest::Response, sk: Vec<u8>) -> Result<Self, ResponseError> {
         let mut r = Self {
-                status: response.status(),
-                headers: response.headers().to_owned(),
-                body: None,
-                pk: None,
-                sk: None
+            status: response.status(),
+            headers: response.headers().to_owned(),
+            body: None,
+            pk: None,
+            sk: None,
         };
 
         match response.text().await {
@@ -54,18 +54,24 @@ impl Response {
                             let body_bytes = base64::decode(body).unwrap();
                             let ncryptf_response = crate::Response::from(sk.clone()).unwrap();
                             match ncryptf_response.decrypt(body_bytes.clone(), None, None) {
-                                Ok(message) =>  {
+                                Ok(message) => {
                                     // If we've already decrypted the response then these will succeed
-                                    let pk =crate::Response::get_public_key_from_response(body_bytes.clone()).unwrap();
-                                    let sk = crate::Response::get_signing_public_key_from_response(body_bytes.clone()).unwrap();
+                                    let pk = crate::Response::get_public_key_from_response(
+                                        body_bytes.clone(),
+                                    )
+                                    .unwrap();
+                                    let sk = crate::Response::get_signing_public_key_from_response(
+                                        body_bytes.clone(),
+                                    )
+                                    .unwrap();
                                     r.body = Some(message);
                                     r.pk = Some(pk);
                                     r.sk = Some(sk);
                                     return Ok(r);
-                                },
-                                Err(_error) => return Err(ResponseError::DecryptingResponseFailed)
+                                }
+                                Err(_error) => return Err(ResponseError::DecryptingResponseFailed),
                             }
-                        },
+                        }
                         _ => {
                             if body.is_empty() {
                                 r.body = None
@@ -78,11 +84,11 @@ impl Response {
                     },
                     // If we don't have a content type on the return, then the server isn't implemented
                     // correctly. We cannot proceed.
-                    _ => return Err(ResponseError::ResponseImplementationError)
+                    _ => return Err(ResponseError::ResponseImplementationError),
                 }
-            },
+            }
             // There's no response
-            Err(_error) => return Err(ResponseError::ResponseMissing)
+            Err(_error) => return Err(ResponseError::ResponseMissing),
         }
     }
 
