@@ -22,6 +22,71 @@ You can add ncryptf to your project via cargo:
 cargo add ncryptf
 ```
 
+Ncryptf supports 2 optional features:
+- `rocket` for rocket.rs bindings
+- `sea-orm` for SeaORM rocket.rs bindings
+- `client` which provides a `reqwest` client you can use to interact with ncryptf.
+
+### Exports
+ncryptf re-exports a few extra libraries for convenience and necessity.
+
+#### Rocket
+Ncryptf uses a modified variant of rocket.rs (0.5.0-rc: see https://github.com/charlesportwoodii/rocket.rs/tree/peek_buffer) to grab the request body to perform authentication with Rocket.rs. It is strongly recommended to have this version of rocket (and other re-exports) stored in a `common` workspace to eliminate the need to add the same cargo dependency in each workspace member.
+
+If you are using rocket.rs `proc_macro` in your `main.rs`, you will still need to import the macro.
+
+```rust
+rocket = { git ="https://github.com/charlesportwoodii/rocket.rs", branch = "peek_buffer", features = ["tls", "secrets", "json"] }
+```
+
+However if you are using the library mapping section outlined below, your app will still use that variant. This is only necessary if you want rocket.rs' global macro.
+
+#### Rocket Db Pools
+Similarly to rocket, rocket-db-pools are also re-exported as a convenience
+
+#### Rocket Dyn Templates
+Similarly to rocket, rocket-dyn-templates are also re-exported as a convenience
+
+#### Sea ORM
+If you are using `sea-orm`, enable the `sea-orm` feature and you can use the re-exported SeaORM libraries customized for Rocket and ncryptf
+
+```rust
+pub use ncryptf::sea_orm as sea_orm;
+pub use ncryptf::sea_orm_migration as sea_orm_migration;
+pub use ncryptf::sea_orm_rocket as sea_orm_rocket;
+```
+
+> NOTE: These re-exports will be removed once Rocket implements a in-framework way of reading the request buffer.
+
+### Library Mapping
+When using the ncryptf re-exports by default the imported struct names will be namespaced under `ncryptf::<lib>`, which can be confusing to rust-analyzer, and the developer. To make rust-analyzer and the compiler more sane, consider using a `common` workspace that re-exports both ncryptf, rocket, and any other features.
+
+Example:
+
+```
+common
+  \ - mod.rs
+    - ncryptflib.rs
+```
+
+In your `mod.rs` or `lib.rs` have the following:
+```rust
+pub mod ncryptflib
+pub use ncryptf::rocketfw as rocket;
+pub use ncryptf::rocket_db_pools as rocket_db_pools;
+pub use ncryptf::rocket_dyn_templates as rocket_dyn_templates;
+pub use ncryptf::sea_orm as sea_orm;
+pub use ncryptf::sea_orm_migration as sea_orm_migration;
+pub use ncryptf::sea_orm_rocket as sea_orm_rocket;
+```
+
+Then in your ncryptflib.rs have the following:
+```rust
+pub use ncryptf::{Keypair, Token, Authorization, Request, Response, NcryptfError, ek_route, auth, client, rocket};
+```
+
+And elsewhere in your code you can then `pub use ncryptflib as ncryptf` to have the standard library available under the normal namespaces without collisions.
+
 ## HMAC+HKDF Authentication
 
 HMAC+HKDF Authentication is an Authentication method that allows ensures the request is not tampered with in transit. This provides resiliance not only against network layer manipulation, but also man-in-the-middle attacks.
@@ -108,6 +173,8 @@ fn echo(data: ncryptf::rocket::Json<TestStruct>) -> ncryptf::rocket::Json<TestSt
 }
 ```
 
+> `JsonResponse<T>` is also available if you want to return a Ncryptf or plain-text Json response with a status code.
+
 4. For bootstrapping, the library provides a convenience endpoint for generated bootstrapping keys.
 
 ```rust
@@ -174,6 +241,8 @@ let res = client
     .send()
     .await?;
 ```
+
+If you have enabled the `client` feature, you can also use that to more simply perform requests. See the cargo documentation for more details and examples.
 
 #### Rocket Request Guard
 

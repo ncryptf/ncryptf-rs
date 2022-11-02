@@ -1,43 +1,48 @@
 use base64;
 use ncryptf::*;
-use reqwest::header::HeaderMap;
-use reqwest::header::HeaderValue;
+use reqwest::header::{HeaderMap, HeaderValue};
 
 #[derive(Debug, Clone)]
 struct ApiTest {
     pub url: Option<String>,
     pub key: Keypair,
-    pub token: Option<String>
+    pub token: Option<String>,
 }
 
 impl ApiTest {
     pub fn setup() -> Self {
         let token = match std::env::var("ACCESS_TOKEN") {
             Ok(s) => Some(s),
-            _ => None
+            _ => None,
         };
 
         let url = match std::env::var("NCRYPTF_TEST_API") {
             Ok(s) => Some(s),
-            _ => Some("http://127.0.0.1:8080".to_string())
+            _ => Some("http://127.0.0.1:8080".to_string()),
         };
 
         return ApiTest {
             url: url,
             key: Keypair::new(),
-            token: token
-        }
+            token: token,
+        };
     }
 
     pub fn get_headers(&self) -> HeaderMap {
         let mut headers = HeaderMap::new();
-        headers.insert(reqwest::header::CONTENT_TYPE, HeaderValue::from_str("application/vnd.ncryptf+json").unwrap());
-        headers.insert(reqwest::header::ACCEPT, HeaderValue::from_str("application/vnd.ncryptf+json").unwrap());
+        headers.insert(
+            reqwest::header::CONTENT_TYPE,
+            HeaderValue::from_str("application/vnd.ncryptf+json").unwrap(),
+        );
+        headers.insert(
+            reqwest::header::ACCEPT,
+            HeaderValue::from_str("application/vnd.ncryptf+json").unwrap(),
+        );
 
         if self.token.is_some() {
             headers.insert(
                 "X-Access-Token",
-                HeaderValue::from_str(self.token.clone().unwrap().as_str()).unwrap()
+                HeaderValue::from_str(self.token.clone().unwrap().as_str()).unwrap(),
             );
         }
 
@@ -49,7 +54,8 @@ fn bootstrap() -> Option<serde_json::Value> {
     let client = reqwest::blocking::Client::new();
     let c = ApiTest::setup();
 
-    let result = client.get(format!("{}/ek", c.clone().url.unwrap()))
+    let result = client
+        .get(format!("{}/ek", c.clone().url.unwrap()))
         .headers(c.get_headers())
         .header("x-pubkey", base64::encode(c.clone().key.get_public_key()))
         .send();
@@ -58,7 +64,7 @@ fn bootstrap() -> Option<serde_json::Value> {
         Err(_error) => {
             assert!(false);
             return None;
-        },
+        }
         Ok(resp) => {
             let r = ncryptf::Response::from(c.clone().key.get_secret_key());
             assert!(r.is_ok());
@@ -100,30 +106,26 @@ fn test_unauthenticated_encrypted_request() {
             assert!(false);
             panic!("Test aborted");
         }
-        Some(s) => s
+        Some(s) => s,
     };
 
     let client = reqwest::blocking::Client::new();
     let c = ApiTest::setup();
 
     let sk = Signature::new();
-    let mut request = match ncryptf::Request::from(
-        c.clone().key.get_secret_key(),
-        sk.clone().get_secret_key()
-    ) {
-        Err(_) => {
-            assert!(false);
-            panic!("Test aborted")
-        },
-        Ok(request) => request
-    };
+    let mut request =
+        match ncryptf::Request::from(c.clone().key.get_secret_key(), sk.clone().get_secret_key()) {
+            Err(_) => {
+                assert!(false);
+                panic!("Test aborted")
+            }
+            Ok(request) => request,
+        };
     let pk = stack.get("public").unwrap().as_str().unwrap();
 
     let payload: serde_json::Value = serde_json::from_str(r#"{ "hello": "world" }"#).unwrap();
-    let encrypted_payload = match request.encrypt(
-        payload.to_string(),
-        base64::decode(pk).unwrap()
-    ) {
+    let encrypted_payload = match request.encrypt(payload.to_string(), base64::decode(pk).unwrap())
+    {
         Ok(ec) => base64::encode(ec),
         Err(_error) => {
             dbg!(_error);
@@ -132,16 +134,20 @@ fn test_unauthenticated_encrypted_request() {
         }
     };
 
-    let result = client.post(format!("{}/echo", c.clone().url.unwrap()))
+    let result = client
+        .post(format!("{}/echo", c.clone().url.unwrap()))
         .body(encrypted_payload)
         .headers(c.get_headers())
-        .header("x-hashid".to_string(), stack.get("hash-id").unwrap().as_str().unwrap());
+        .header(
+            "x-hashid".to_string(),
+            stack.get("hash-id").unwrap().as_str().unwrap(),
+        );
 
     match result.send() {
         Err(_) => {
             assert!(false);
             panic!("test aborted")
-        },
+        }
         Ok(resp) => {
             assert_eq!(resp.status(), 200);
             let r = Response::from(c.clone().key.get_secret_key());
@@ -166,33 +172,32 @@ fn test_authenticated_encrypted_request() {
             assert!(false);
             panic!("Test aborted");
         }
-        Some(s) => s
+        Some(s) => s,
     };
 
     let client = reqwest::blocking::Client::new();
     let c = ApiTest::setup();
 
     let sk = Signature::new();
-    let mut request = match ncryptf::Request::from(
-        c.clone().key.get_secret_key(),
-        sk.clone().get_secret_key()
-    ) {
-        Err(_) => {
-            assert!(false);
-            panic!("Test aborted")
-        },
-        Ok(request) => request
-    };
+    let mut request =
+        match ncryptf::Request::from(c.clone().key.get_secret_key(), sk.clone().get_secret_key()) {
+            Err(_) => {
+                assert!(false);
+                panic!("Test aborted")
+            }
+            Ok(request) => request,
+        };
     let pk = stack.get("public").unwrap().as_str().unwrap();
 
-    let payload: serde_json::Value = serde_json::from_str(r#"{
+    let payload: serde_json::Value = serde_json::from_str(
+        r#"{
         "email": "clara.oswald@example.com",
         "password": "c0rect h0rs3 b@tt3y st@Pl3"
-    }"#).unwrap();
-    let encrypted_payload = match request.encrypt(
-        payload.to_string(),
-        base64::decode(pk).unwrap()
-    ) {
+    }"#,
+    )
+    .unwrap();
+    let encrypted_payload = match request.encrypt(payload.to_string(), base64::decode(pk).unwrap())
+    {
         Ok(ec) => base64::encode(ec),
         Err(_error) => {
             assert!(false);
@@ -200,16 +205,20 @@ fn test_authenticated_encrypted_request() {
         }
     };
 
-    let result = client.post(format!("{}/authenticate", c.clone().url.unwrap()))
+    let result = client
+        .post(format!("{}/authenticate", c.clone().url.unwrap()))
         .body(encrypted_payload)
         .headers(c.get_headers())
-        .header("x-hashid".to_string(), stack.get("hash-id").unwrap().as_str().unwrap());
+        .header(
+            "x-hashid".to_string(),
+            stack.get("hash-id").unwrap().as_str().unwrap(),
+        );
 
     match result.send() {
         Err(_) => {
             assert!(false);
             panic!("test aborted")
-        },
+        }
         Ok(resp) => {
             assert_eq!(resp.status(), 200);
             let r = Response::from(c.clone().key.get_secret_key());
@@ -252,43 +261,52 @@ fn test_authenticated_encrypted_request() {
             let client = reqwest::blocking::Client::new();
             let c = ApiTest::setup();
 
-            let mut request = match ncryptf::Request::from(
-                c.clone().key.get_secret_key(),
-                t.signature.clone()
-            ) {
-                Err(_) => {
-                    assert!(false);
-                    panic!("Test aborted")
-                },
-                Ok(request) => request
-            };
+            let mut request =
+                match ncryptf::Request::from(c.clone().key.get_secret_key(), t.signature.clone()) {
+                    Err(_) => {
+                        assert!(false);
+                        panic!("Test aborted")
+                    }
+                    Ok(request) => request,
+                };
             let pk = stack.get("public").unwrap().as_str().unwrap();
 
-            let payload: serde_json::Value = serde_json::from_str(r#"{ "hello": "world" }"#).unwrap();
-            let encrypted_payload = match request.encrypt(
-                payload.to_string(),
-                base64::decode(pk).unwrap()
-            ) {
-                Ok(ec) => base64::encode(ec),
-                Err(_error) => {
-                    dbg!(_error);
-                    assert!(false);
-                    panic!("Test aborted");
-                }
-            };
+            let payload: serde_json::Value =
+                serde_json::from_str(r#"{ "hello": "world" }"#).unwrap();
+            let encrypted_payload =
+                match request.encrypt(payload.to_string(), base64::decode(pk).unwrap()) {
+                    Ok(ec) => base64::encode(ec),
+                    Err(_error) => {
+                        dbg!(_error);
+                        assert!(false);
+                        panic!("Test aborted");
+                    }
+                };
 
-            let auth = Authorization::from("PUT".to_string(), "/echo".to_string(), t, chrono::offset::Utc::now(), payload.to_string(), None, None);
-            let result = client.put(format!("{}/echo", c.clone().url.unwrap()))
+            let auth = Authorization::from(
+                "PUT".to_string(),
+                "/echo".to_string(),
+                t,
+                chrono::offset::Utc::now(),
+                payload.to_string(),
+                None,
+                None,
+            );
+            let result = client
+                .put(format!("{}/echo", c.clone().url.unwrap()))
                 .body(encrypted_payload)
                 .headers(c.get_headers())
                 .header("Authorization".to_string(), auth.unwrap().get_header())
-                .header("x-hashid".to_string(), stack.get("hash-id").unwrap().as_str().unwrap());
+                .header(
+                    "x-hashid".to_string(),
+                    stack.get("hash-id").unwrap().as_str().unwrap(),
+                );
 
             match result.send() {
                 Err(_) => {
                     assert!(false);
                     panic!("test aborted")
-                },
+                }
                 Ok(resp) => {
                     assert_eq!(resp.status(), 200);
                     let r = Response::from(c.clone().key.get_secret_key());

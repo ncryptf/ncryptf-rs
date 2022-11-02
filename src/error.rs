@@ -12,5 +12,5 @@ pub enum NcryptfError {
     #[error("message could not be encrypted")]
     EncryptError,
     #[error("message could not be decrypted")]
-    DecryptError
+    DecryptError,
 }

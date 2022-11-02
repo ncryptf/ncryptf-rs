@@ -1,4 +1,4 @@
-use ncryptf::util::randombytes_buf;
+use ncryptf::randombytes_buf;
 
 #[test]
 fn test_randombytes() {

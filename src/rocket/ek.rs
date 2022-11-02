@@ -1,26 +1,52 @@
-use serde::{Deserialize, Serialize};
-use crate::Keypair;
-use crate::Signature;
+use crate::{Keypair, Signature};
 use rand::{distributions::Alphanumeric, Rng};
+use serde::{Deserialize, Serialize};
 
 /// Reusable encryption key data for client parsing
-/// 
+///
 /// This is exported for use in your application for deserializing the request.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ExportableEncryptionKeyData {
     pub public: String,
     pub signature: String,
-    pub hash_id: String
+    pub hash_id: String,
+    pub expires_at: i64,
+    pub ephemeral: bool,
+}
+
+impl ExportableEncryptionKeyData {
+    /// Returns true if this key is expired
+    pub fn is_expired(&self) -> bool {
+        return chrono::Utc::now().timestamp() >= self.expires_at;
+    }
+
+    /// Returns the public key as a Vec
+    pub fn get_public_key(&self) -> Option<Vec<u8>> {
+        if self.public.is_empty() {
+            return None;
+        }
+
+        return Some(base64::decode(self.public.clone()).unwrap());
+    }
+
+    /// Returns the signature key as a Vec
+    pub fn get_signature_key(&self) -> Option<Vec<u8>> {
+        if self.public.is_empty() {
+            return None;
+        }
+
+        return Some(base64::decode(self.signature.clone()).unwrap());
+    }
 }
 
 /// Represents an Encryption key used to encrypt and decrypt requests
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EncryptionKey {
     bkp: Keypair,
     skp: Keypair,
     ephemeral: bool,
     pub expires_at: i64,
-    hash_id: String
+    hash_id: String,
 }
 
 impl EncryptionKey {
@@ -48,7 +74,7 @@ impl EncryptionKey {
     /// Expiration should be handled server side
     /// But the client should know if they need a new key
     pub fn is_expired(&self) -> bool {
-        if self.expires_at.clone() > chrono::Utc::now().timestamp() {
+        if chrono::Utc::now().timestamp() >= self.expires_at {
             return true;
         }
 
@@ -63,13 +89,15 @@ impl EncryptionKey {
             .map(char::from)
             .collect();
 
+        // Encryption keys are valid for an hour
+        let expiration = chrono::Utc::now() + chrono::Duration::hours(1);
         return Self {
             bkp: Keypair::new(),
             skp: Signature::new(),
             ephemeral: ephemeral,
-            expires_at: chrono::Utc::now().timestamp() + 3600,
-            hash_id: s
-        }
+            expires_at: expiration.timestamp(),
+            hash_id: s,
+        };
     }
 }
 
@@ -121,35 +149,36 @@ impl EncryptionKey {
 #[macro_export]
 macro_rules! ek_route {
     ($T: ty) => {
-            use rocket::get;
-            use rocket::http::Status;
-            use rocket_db_pools::Database;
-            use rocket_db_pools::Connection as RedisConnection;
-            #[allow(unused_imports)] // for rust-analyzer
-            use rocket_db_pools::deadpool_redis::redis::AsyncCommands;
+        use rocket::{get, http::Status};
+        #[allow(unused_imports)] // for rust-analyzer
+        use rocket_db_pools::deadpool_redis::redis::AsyncCommands;
+        use rocket_db_pools::{Connection as RedisConnection, Database};
 
-            use serde::{Deserialize, Serialize};
-            use ncryptf::rocket::{EncryptionKey, ExportableEncryptionKeyData};
+        use ncryptf::rocket::{EncryptionKey, ExportableEncryptionKeyData};
+        use serde::{Deserialize, Serialize};
 
-            #[get("/ek")]
-            pub async fn ncryptf_ek_route( rdb: RedisConnection<$T>) -> Result<ncryptf::rocket::Json<ExportableEncryptionKeyData>, Status> {
-                let ek = EncryptionKey::new(true);
-                let mut redis: rocket_db_pools::deadpool_redis::Connection = rdb.into_inner();
+        #[get("/ek")]
+        pub async fn ncryptf_ek_route(
+            rdb: RedisConnection<$T>,
+        ) -> Result<ncryptf::rocket::Json<ExportableEncryptionKeyData>, Status> {
+            let ek = EncryptionKey::new(true);
+            let mut redis: rocket_db_pools::deadpool_redis::Connection = rdb.into_inner();
 
-                let _result = match redis.set_ex(
-                    ek.get_hash_id(),
-                    serde_json::to_string(&ek).unwrap(),
-                    3600
-                ).await {
-                    Ok(result) => result,
-                    Err(_) => return Err(Status::InternalServerError)
-                };
+            let _result = match redis
+                .set_ex(ek.get_hash_id(), serde_json::to_string(&ek).unwrap(), 3600)
+                .await
+            {
+                Ok(result) => result,
+                Err(_) => return Err(Status::InternalServerError),
+            };
 
-                return Ok(ncryptf::rocket::Json(ExportableEncryptionKeyData {
-                    public: base64::encode(ek.get_box_kp().get_public_key()),
-                    signature: base64::encode(ek.get_sign_kp().get_public_key()),
-                    hash_id: ek.get_hash_id()
-                }));
-            }
+            return Ok(ncryptf::rocket::Json(ExportableEncryptionKeyData {
+                public: base64::encode(ek.get_box_kp().get_public_key()),
+                signature: base64::encode(ek.get_sign_kp().get_public_key()),
+                hash_id: ek.get_hash_id(),
+                ephemeral: true,
+                expires_at: ek.expires_at,
+            }));
         }
-    }
+    };
+}

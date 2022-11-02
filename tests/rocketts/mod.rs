@@ -1,23 +1,25 @@
-use ncryptf::{ek_route, rocket::ExportableEncryptionKeyData};
-use rocket::{local::blocking::Client, http::Header};
-use serde::Deserialize;
+use ncryptf::{ek_route, randombytes_buf, rocket::ExportableEncryptionKeyData};
 use redis::Commands;
-use rocket::serde::{Serialize};
+use rocket::{http::Header, local::blocking::Client, serde::Serialize};
+use serde::Deserialize;
 
 use ncryptf::rocket::Fairing as NcryptfFairing;
-use rocket_db_pools::{Database, deadpool_redis};
+use rocket_db_pools::{deadpool_redis, Database};
 
 // This is a mock user used to simplify return data
 #[derive(Debug, Clone)]
 pub struct User {
-    pub id: i32
+    pub id: i32,
 }
 
 // Implement the Authorization Trait
 #[async_trait]
 impl ncryptf::rocket::AuthorizationTrait for User {
     /// Our static implementation returns a static token
-    async fn get_token_from_access_token(_access_token: String, _f: rocket_db_pools::figment::Figment) -> Result<ncryptf::Token, ncryptf::rocket::TokenError> {
+    async fn get_token_from_access_token(
+        _access_token: String,
+        _f: rocket_db_pools::figment::Figment,
+    ) -> Result<ncryptf::Token, ncryptf::rocket::TokenError> {
         let now = chrono::Utc::now().timestamp();
 
         let token =  ncryptf::Token::from(
@@ -32,7 +34,10 @@ impl ncryptf::rocket::AuthorizationTrait for User {
     }
 
     /// Returns a static user from an authorization token
-    async fn get_user_from_token(_token: ncryptf::Token, _f: rocket_db_pools::figment::Figment) -> Result<Box<Self>, ncryptf::rocket::TokenError> {
+    async fn get_user_from_token(
+        _token: ncryptf::Token,
+        _f: rocket_db_pools::figment::Figment,
+    ) -> Result<Box<Self>, ncryptf::rocket::TokenError> {
         return Ok(Box::new(User { id: 1 }));
     }
 }
@@ -46,17 +51,27 @@ pub struct RedisDb(deadpool_redis::Pool);
 /// A simple test struct
 #[derive(Deserialize, Serialize, Clone, Debug)]
 struct TestStruct<'r> {
-    pub hello: &'r str
+    pub hello: &'r str,
 }
 
-#[post("/echo", data="<data>")]
-fn echo(
-    data: ncryptf::rocket::Json<TestStruct>
-) -> ncryptf::rocket::Json<TestStruct> {
+#[derive(Deserialize, Serialize, Clone, Debug)]
+struct ExampleStruct {
+    pub f: String,
+    pub g: String,
+    pub h: String,
+}
+
+#[post("/echo2", data = "<data>")]
+fn echo2(data: ncryptf::rocket::Json<ExampleStruct>) -> ncryptf::rocket::Json<ExampleStruct> {
     return ncryptf::rocket::Json(data.0);
 }
 
-#[post("/auth_echo", data="<data>")]
+#[post("/echo", data = "<data>")]
+fn echo(data: ncryptf::rocket::Json<TestStruct>) -> ncryptf::rocket::Json<TestStruct> {
+    return ncryptf::rocket::Json(data.0);
+}
+
+#[post("/auth_echo", data = "<data>")]
 fn auth_echo(
     data: ncryptf::rocket::Json<TestStruct>,
     _user: User, // Satisfying the reqest guard is sufficient to verify the request can be parsed
@@ -65,23 +80,29 @@ fn auth_echo(
 }
 
 /// Setup helper function
-fn setup() -> Client{
+fn setup() -> Client {
     let config = rocket::Config::figment()
         .merge(("ident", false))
-        .merge(("databases.cache", rocket_db_pools::Config {
-            url: format!("redis://127.0.0.1:6379/"),
-            min_connections: None,
-            max_connections: 1024,
-            connect_timeout: 3,
-            idle_timeout: None,
-        }))
-        .merge(("databases.cache2", rocket_db_pools::Config {
-            url: format!("redis://127.0.0.1:6379/"),
-            min_connections: None,
-            max_connections: 1024,
-            connect_timeout: 3,
-            idle_timeout: None,
-        }))
+        .merge((
+            "databases.cache",
+            rocket_db_pools::Config {
+                url: format!("redis://127.0.0.1:6379/"),
+                min_connections: None,
+                max_connections: 1024,
+                connect_timeout: 3,
+                idle_timeout: None,
+            },
+        ))
+        .merge((
+            "databases.cache2",
+            rocket_db_pools::Config {
+                url: format!("redis://127.0.0.1:6379/"),
+                min_connections: None,
+                max_connections: 1024,
+                connect_timeout: 3,
+                idle_timeout: None,
+            },
+        ))
         .merge(("log_level", rocket::config::LogLevel::Off));
 
     ek_route!(RedisDb);
@@ -89,7 +110,7 @@ fn setup() -> Client{
     let rocket = rocket::custom(config)
         .attach(NcryptfFairing)
         .attach(RedisDb::init())
-        .mount("/", routes![echo, auth_echo])
+        .mount("/", routes![echo, auth_echo, echo2])
         .mount("/ncryptf", routes![ncryptf_ek_route]);
 
     return match Client::tracked(rocket) {
@@ -102,7 +123,7 @@ fn setup() -> Client{
 }
 
 fn get_ek() -> ncryptf::rocket::EncryptionKey {
-     let rdb = "redis://127.0.0.1/".to_string();
+    let rdb = "redis://127.0.0.1/".to_string();
     // Create a new client
     let client = match redis::Client::open(rdb) {
         Ok(client) => client,
@@ -136,7 +157,8 @@ fn get_ek() -> ncryptf::rocket::EncryptionKey {
 #[test]
 fn test_ek_route_plain() {
     let client = setup();
-    let response = client.get("/ncryptf/ek")
+    let response = client
+        .get("/ncryptf/ek")
         .header(Header::new("Content-Type", "application/json"))
         .header(Header::new("Accept", "application/json"))
         .dispatch();
@@ -160,7 +182,7 @@ fn test_ek_route_plain() {
 
             assert_eq!(s.len(), 32);
             assert_eq!(p.len(), 32);
-        },
+        }
         Err(_) => {
             return assert!(false);
         }
@@ -177,21 +199,19 @@ fn test_echo() {
 
     let kp = ncryptf::Keypair::new();
     let sk = ncryptf::Signature::new();
-    let req = ncryptf::Request::from(
-        kp.get_secret_key(),
-        sk.get_secret_key()
-    );
+    let req = ncryptf::Request::from(kp.get_secret_key(), sk.get_secret_key());
 
-    let req_body = req.unwrap().encrypt(
-        json.to_string(),
-        ek.get_box_kp().get_public_key()
-    ).unwrap();
+    let req_body = req
+        .unwrap()
+        .encrypt(json.to_string(), ek.get_box_kp().get_public_key())
+        .unwrap();
     let astr = base64::encode(req_body.clone());
 
     let vr = ncryptf::Response::get_version(req_body.clone());
     assert_eq!(vr.unwrap(), 2);
 
-    let response = client.post("/echo")
+    let response = client
+        .post("/echo")
         .body(astr)
         .header(Header::new("Content-Type", "application/vnd.ncryptf+json"))
         .header(Header::new("Accept", "application/vnd.ncryptf+json"))
@@ -204,11 +224,7 @@ fn test_echo() {
     let bbody = base64::decode(body.clone()).unwrap();
     let r = ncryptf::Response::from(kp.get_secret_key()).unwrap();
 
-    let message = r.decrypt(
-        bbody,
-        None,
-        None
-    );
+    let message = r.decrypt(bbody, None, None);
     assert!(message.is_ok());
     assert_eq!(message.unwrap(), json.to_string());
 }
@@ -223,16 +239,17 @@ fn test_echo_plain() {
 
     let kp = ncryptf::Keypair::new();
     let sk = ncryptf::Signature::new();
-    let req = ncryptf::Request::from(
-        kp.get_secret_key(),
-        sk.get_secret_key()
-    );
+    let req = ncryptf::Request::from(kp.get_secret_key(), sk.get_secret_key());
 
-    let body = req.unwrap().encrypt(json.to_string(), ek.get_box_kp().get_public_key()).unwrap();
+    let body = req
+        .unwrap()
+        .encrypt(json.to_string(), ek.get_box_kp().get_public_key())
+        .unwrap();
     assert_eq!(body.clone().len(), 253);
     let astr = base64::encode(body.clone());
 
-    let response = client.post("/echo")
+    let response = client
+        .post("/echo")
         .body(astr)
         .header(Header::new("Content-Type", "application/vnd.ncryptf+json"))
         .header(Header::new("Accept", "application/json"))
@@ -253,7 +270,8 @@ fn test_echo_plain_to_encrypted() {
 
     let kp = ncryptf::Keypair::new();
 
-    let response = client.post("/echo")
+    let response = client
+        .post("/echo")
         .body(json.to_string())
         .header(Header::new("Content-Type", "application/json"))
         .header(Header::new("Accept", "application/vnd.ncryptf+json"))
@@ -267,11 +285,7 @@ fn test_echo_plain_to_encrypted() {
     let bbody = base64::decode(body.clone()).unwrap();
     let r = ncryptf::Response::from(kp.get_secret_key()).unwrap();
 
-    let message = r.decrypt(
-        bbody,
-        None,
-        None
-    );
+    let message = r.decrypt(bbody, None, None);
     assert!(message.is_ok());
     assert_eq!(message.unwrap(), json.to_string());
 }
@@ -281,7 +295,8 @@ fn test_echo_plain_to_plain() {
     let client = setup();
     let json: serde_json::Value = serde_json::from_str(r#"{ "hello": "world"}"#).unwrap();
 
-    let response = client.post("/echo")
+    let response = client
+        .post("/echo")
         .body(json.to_string())
         .header(Header::new("Content-Type", "application/json"))
         .header(Header::new("Accept", "application/json"))
@@ -318,7 +333,7 @@ fn test_auth_echo_plain_to_plain() {
         chrono::Utc::now(),
         json.clone().to_string(),
         None,
-        Some(2)
+        Some(2),
     ) {
         Ok(auth) => auth,
         Err(_) => {
@@ -327,7 +342,8 @@ fn test_auth_echo_plain_to_plain() {
         }
     };
 
-    let response = client.post("/auth_echo")
+    let response = client
+        .post("/auth_echo")
         .body(json.to_string())
         .header(Header::new("Authorization", auth.get_header()))
         .header(Header::new("Content-Type", "application/json"))
@@ -363,15 +379,12 @@ fn test_auth_echo_encrypted_to_plain() {
         now + 14400
     ).unwrap();
 
-    let req = ncryptf::Request::from(
-        kp.get_secret_key(),
-        token.signature.clone()
-    );
+    let req = ncryptf::Request::from(kp.get_secret_key(), token.signature.clone());
 
-    let req_body = req.unwrap().encrypt(
-        json.to_string(),
-        ek.get_box_kp().get_public_key()
-    ).unwrap();
+    let req_body = req
+        .unwrap()
+        .encrypt(json.to_string(), ek.get_box_kp().get_public_key())
+        .unwrap();
     let astr = base64::encode(req_body.clone());
 
     let vr = ncryptf::Response::get_version(req_body.clone());
@@ -384,7 +397,7 @@ fn test_auth_echo_encrypted_to_plain() {
         chrono::Utc::now(),
         json.clone().to_string(),
         None,
-        Some(2)
+        Some(2),
     ) {
         Ok(auth) => auth,
         Err(_) => {
@@ -393,7 +406,8 @@ fn test_auth_echo_encrypted_to_plain() {
         }
     };
 
-    let response = client.post("/auth_echo")
+    let response = client
+        .post("/auth_echo")
         .body(astr)
         .header(Header::new("Authorization", auth.get_header()))
         .header(Header::new("Content-Type", "application/vnd.ncryptf+json"))
@@ -407,11 +421,53 @@ fn test_auth_echo_encrypted_to_plain() {
     let bbody = base64::decode(body.clone()).unwrap();
     let r = ncryptf::Response::from(kp.get_secret_key()).unwrap();
 
-    let message = r.decrypt(
-        bbody,
-        None,
-        None
-    );
+    let message = r.decrypt(bbody, None, None);
+    assert!(message.is_ok());
+    assert_eq!(message.unwrap(), json.to_string());
+}
+
+/// This will send an ncryptf encrypted message, and should receive back an ncryptf encrypted response
+#[test]
+fn test_echo_large_body() {
+    let client = setup();
+
+    let ek = get_ek();
+
+    let s = ExampleStruct {
+        f: base64::encode(randombytes_buf(64)),
+        g: base64::encode(randombytes_buf(64)),
+        h: base64::encode(randombytes_buf(64)),
+    };
+    let json = serde_json::to_string(&s).unwrap();
+
+    let kp = ncryptf::Keypair::new();
+    let sk = ncryptf::Signature::new();
+    let req = ncryptf::Request::from(kp.get_secret_key(), sk.get_secret_key());
+
+    let req_body = req
+        .unwrap()
+        .encrypt(json.to_string(), ek.get_box_kp().get_public_key())
+        .unwrap();
+    let astr = base64::encode(req_body.clone());
+
+    let vr = ncryptf::Response::get_version(req_body.clone());
+    assert_eq!(vr.unwrap(), 2);
+
+    let response = client
+        .post("/echo2")
+        .body(astr)
+        .header(Header::new("Content-Type", "application/vnd.ncryptf+json"))
+        .header(Header::new("Accept", "application/vnd.ncryptf+json"))
+        .header(Header::new("X-HashId", ek.get_hash_id()))
+        .dispatch();
+
+    // We should get an HTTP 200 back
+    assert_eq!(response.status().code, 200);
+    let body = response.into_string().unwrap();
+    let bbody = base64::decode(body.clone()).unwrap();
+    let r = ncryptf::Response::from(kp.get_secret_key()).unwrap();
+
+    let message = r.decrypt(bbody, None, None);
     assert!(message.is_ok());
     assert_eq!(message.unwrap(), json.to_string());
 }

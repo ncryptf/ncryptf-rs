@@ -1,5 +1,5 @@
+use super::cases::{get_date, get_salt, get_test_cases, get_v1_signatures, get_v2_signatures};
 use ncryptf::*;
-use super::cases::{get_test_cases, get_v2_signatures, get_date, get_salt, get_v1_signatures};
 
 #[test]
 fn test_v1_signatures() {
@@ -9,7 +9,14 @@ fn test_v1_signatures() {
     let salt = get_salt();
 
     for (i, case) in cases.iter().enumerate() {
-        let signature = Signature::derive(case.method.clone(), case.uri.clone(), salt.clone(), date, case.payload.clone(), Some(1));
+        let signature = Signature::derive(
+            case.method.clone(),
+            case.uri.clone(),
+            salt.clone(),
+            date,
+            case.payload.clone(),
+            Some(1),
+        );
         let expected = signatures.get(i).unwrap().to_owned();
         let e = expected.as_str();
         let s: Vec<&str> = signature.split("\n").collect();
@@ -25,7 +32,14 @@ fn test_v2_signatures() {
     let salt = get_salt();
 
     for (i, case) in cases.iter().enumerate() {
-        let signature = Signature::derive(case.method.clone(), case.uri.clone(), salt.clone(), date, case.payload.clone(), Some(2));
+        let signature = Signature::derive(
+            case.method.clone(),
+            case.uri.clone(),
+            salt.clone(),
+            date,
+            case.payload.clone(),
+            Some(2),
+        );
         let expected = signatures.get(i).unwrap().to_owned();
         let e = expected.as_str();
         let s: Vec<&str> = signature.split("\n").collect();
