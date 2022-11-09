@@ -26,10 +26,13 @@ pub enum RequestError {
 /// Requests can be constructed by calling:
 ///
 /// ```rust
-/// let mut request = ncryptf::client::Request::new(client, "https://www.ncryptf.com", Some(ncryptf::Token));
+/// let mut request = ncryptf::client::Request::<T>::new(client, "https://www.ncryptf.com", Some(ncryptf::Token));
 /// ```
+/// Where `T` is an implementation of `UpdateTokenTrait`, which provides an essential function for handling refresh tokens.
+/// When the Token object is updated, `UpdateTokenTrait::token_update` will be called with the new token for you to handle.
+/// If you wish to handle this separatedly, you can use the `UpdateTokenImpl` dummy trait.
 ///
-/// and then use the helper http verbe methods to make an request, which will automatically handle setting up an encrypted request
+/// and then use the helper http verb methods to make an request, which will automatically handle setting up an encrypted request
 /// for you which includes bootstraping a new encryption key from a compliant server, and encrypting the request with a one-time encryption key
 /// that is thrown away at the end of the request
 ///
@@ -40,24 +43,40 @@ pub enum RequestError {
 /// let response: ncryptf::Client::Response = request.put("/user/1", "{ .. json ..}").await.unwrap();
 /// ```
 ///
-/// > NOTE: Only GET, DELETE, POST, and PUT verbs are supported for this client library -- you likely do not need to have an encrypted HEAD, or OPTIONS for an API.
+/// > NOTE: Only GET, DELETE, POST, PATHCH, and PUT verbs are supported for this client library -- you likely do not need to have an encrypted HEAD, or OPTIONS for an API.
 ///
 /// An `ncryptf::Client::Response` is emitted on success. The response automatically handles decrypting the response for your application.
 #[derive(Debug, Clone)]
-pub struct Request {
+pub struct Request<T: UpdateTokenTrait> {
     pub client: reqwest::Client,
     pub endpoint: String,
     pub token: Option<crate::Token>,
+    pub cb: Option<T>,
     ek: Option<crate::rocket::ExportableEncryptionKeyData>,
 }
 
-impl Request {
+pub trait UpdateTokenTrait: Send + Sync {
+    /// Provides a post-callback // token update mechansim that can be controlled by the caller
+    /// Necessary for Token refresh implementation
+    fn token_update(&self, token: crate::Token) -> bool;
+}
+
+pub struct UpdateTokenImpl {}
+
+impl UpdateTokenTrait for UpdateTokenImpl {
+    fn token_update(&self, _token: crate::Token) -> bool {
+        true
+    }
+}
+
+impl<T: UpdateTokenTrait> Request<T> {
     /// Constructs a new request
     pub fn new(client: reqwest::Client, endpoint: &str, token: Option<crate::Token>) -> Self {
         Self {
             client,
             endpoint: endpoint.to_string(),
             token,
+            cb: None,
             ek: None,
         }
     }
@@ -123,19 +142,24 @@ impl Request {
 
     /// Performs an HTTP GET request
     pub async fn get(&mut self, url: &str) -> Result<crate::client::Response, RequestError> {
-        return self.execute("GET", url, "").await;
+        return self.execute("GET", url, None).await;
     }
 
     /// Performs an HTTP DELETE request
-    pub async fn delete(&mut self, url: &str) -> Result<crate::client::Response, RequestError> {
-        return self.execute("DELETE", url, "").await;
+    pub async fn delete(&mut self, url: &str, payload: Option<&str>) -> Result<crate::client::Response, RequestError> {
+        return self.execute("DELETE", url, payload).await;
+    }
+
+    /// Performs an HTTP PATCH request
+    pub async fn patch(&mut self, url: &str, payload: Option<&str>) -> Result<crate::client::Response, RequestError> {
+        return self.execute("PATCH", url, payload).await;
     }
 
     /// Performs an HTTP POST request
     pub async fn post(
         &mut self,
         url: &str,
-        payload: &str,
+        payload: Option<&str>,
     ) -> Result<crate::client::Response, RequestError> {
         return self.execute("POST", url, payload).await;
     }
@@ -144,7 +168,7 @@ impl Request {
     pub async fn put(
         &mut self,
         url: &str,
-        payload: &str,
+        payload: Option<&str>,
     ) -> Result<crate::client::Response, RequestError> {
         return self.execute("PUT", url, payload).await;
     }
@@ -161,8 +185,13 @@ impl Request {
         &mut self,
         method: &str,
         url: &str,
-        payload: &str,
+        payload: Option<&'async_recursion str>,
     ) -> Result<crate::client::Response, RequestError> {
+        let payload_actual = match payload {
+            Some(payload) => payload,
+            None => ""
+        };
+
         match &self.ek {
             Some(ek) => {
                 if ek.is_expired() {
@@ -191,7 +220,7 @@ impl Request {
                         .post(
                             format!("/ncryptf/token/refresh?refresh_token={}", refresh_token)
                                 .as_str(),
-                            "",
+                            None,
                         )
                         .await
                     {
@@ -200,6 +229,10 @@ impl Request {
                                 Ok(tt) => {
                                     self.token = Some(tt.clone());
                                     token = tt.clone();
+                                    match &self.cb {
+                                        Some(callback) => callback.token_update(tt.clone()),
+                                        None => false
+                                    };
                                 }
                                 Err(_error) => return Err(RequestError::TokenExpired),
                             },
@@ -215,7 +248,7 @@ impl Request {
                     url.to_string().clone(),
                     token.clone(),
                     Utc::now(),
-                    payload.to_string(),
+                    payload_actual.to_string(),
                     None,
                     None,
                 ) {
@@ -262,7 +295,7 @@ impl Request {
             _ => return Err(RequestError::InvalidArgument),
         };
 
-        match payload {
+        match payload_actual {
             "" => {
                 headers.insert(
                     "Content-Type",
@@ -284,7 +317,7 @@ impl Request {
 
                 let mut request = crate::Request::from(kp.get_secret_key(), sk).unwrap();
                 match request.encrypt(
-                    payload.to_string(),
+                    payload_actual.to_string(),
                     self.ek.as_ref().unwrap().clone().get_public_key().unwrap(),
                 ) {
                     Ok(body) => {
