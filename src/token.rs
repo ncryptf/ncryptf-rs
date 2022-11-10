@@ -28,8 +28,11 @@ impl Token {
         }
 
         return Self {
-            access_token: base64::encode(crate::util::randombytes_buf(48)),
-            refresh_token: base64::encode(crate::util::randombytes_buf(64)),
+            access_token: base64::encode_config(crate::util::randombytes_buf(48), base64::URL_SAFE),
+            refresh_token: base64::encode_config(
+                crate::util::randombytes_buf(64),
+                base64::URL_SAFE,
+            ),
             ikm: crate::util::randombytes_buf(32),
             signature: crate::util::randombytes_buf(64),
             expires_at: expires_at,

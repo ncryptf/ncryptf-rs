@@ -1,5 +1,7 @@
+use std::fmt;
+
 use chrono::Utc;
-use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::{header::{HeaderMap, HeaderValue}, RequestBuilder};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -26,7 +28,7 @@ pub enum RequestError {
 /// Requests can be constructed by calling:
 ///
 /// ```rust
-/// let mut request = ncryptf::client::Request::<T>::new(client, "https://www.ncryptf.com", Some(ncryptf::Token));
+/// let mut request = ncryptf::client::Request::<T>::new(client, "https://www.ncryptf.com", Some(ncryptf::Token), Some(T));
 /// ```
 /// Where `T` is an implementation of `UpdateTokenTrait`, which provides an essential function for handling refresh tokens.
 /// When the Token object is updated, `UpdateTokenTrait::token_update` will be called with the new token for you to handle.
@@ -47,43 +49,96 @@ pub enum RequestError {
 ///
 /// An `ncryptf::Client::Response` is emitted on success. The response automatically handles decrypting the response for your application.
 #[derive(Debug, Clone)]
-pub struct Request<T: UpdateTokenTrait> {
+pub struct Request<UT, RT>
+    where
+    UT: UpdateTokenTrait,
+    RT: RequestTrait
+{
     pub client: reqwest::Client,
     pub endpoint: String,
     pub token: Option<crate::Token>,
-    pub cb: Option<T>,
+    pub ut: Option<UT>,
+    pub rt: Option<RT>,
     ek: Option<crate::rocket::ExportableEncryptionKeyData>,
 }
+
+#[derive(Debug, Clone)]
+pub enum Method {
+    Get,
+    Post,
+    Put,
+    Patch,
+    Delete
+}
+
+impl fmt::Display for Method {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
 
 pub trait UpdateTokenTrait: Send + Sync {
     /// Provides a post-callback // token update mechansim that can be controlled by the caller
     /// Necessary for Token refresh implementation
-    fn token_update(&self, token: crate::Token) -> bool;
-}
-
-pub struct UpdateTokenImpl {}
-
-impl UpdateTokenTrait for UpdateTokenImpl {
     fn token_update(&self, _token: crate::Token) -> bool {
-        true
+        return true;
     }
 }
 
-impl<T: UpdateTokenTrait> Request<T> {
+pub trait RequestTrait: Send + Sync {
+    /// Modify the request before it is sent
+    fn before(&self, builder: RequestBuilder) -> RequestBuilder {
+        return builder;
+    }
+
+    /// Run a task after the request is sent
+    fn after(&self, _response: crate::client::Response) {
+        return;
+    }
+}
+
+impl<UT: UpdateTokenTrait, RT: RequestTrait> Request<UT, RT> {
     /// Constructs a new request
-    pub fn new(client: reqwest::Client, endpoint: &str, token: Option<crate::Token>) -> Self {
+    pub fn new_simple(
+        client: reqwest::Client,
+        endpoint: &str,
+        token: Option<crate::Token>
+    ) -> Self {
+        return Self::new(client, endpoint, token, None, None);
+    }
+
+    /// Constructs a new request
+    pub fn new(
+        client: reqwest::Client,
+        endpoint: &str,
+        token: Option<crate::Token>,
+        ut: Option<UT>,
+        rt: Option<RT>,
+    ) -> Self {
         Self {
             client,
             endpoint: endpoint.to_string(),
             token,
-            cb: None,
+            ut,
+            rt,
             ek: None,
         }
     }
 
-    /// Updates the token so the
+    /// Updates the token in both the current instance and via the callback
     pub fn update_token(&mut self, token: Option<crate::Token>) {
-        self.token = token;
+        self.token = token.clone();
+
+        match &self.ut {
+            Some(callback) => match token {
+                Some(token) => {
+                    callback.token_update(token);
+                }
+                None => {}
+            },
+            None => {}
+        };
     }
 
     /// This will bootstrap our request and get the necessary encryption keys to encrypt the request
@@ -142,17 +197,25 @@ impl<T: UpdateTokenTrait> Request<T> {
 
     /// Performs an HTTP GET request
     pub async fn get(&mut self, url: &str) -> Result<crate::client::Response, RequestError> {
-        return self.execute("GET", url, None).await;
+        return self.execute(Method::Get, url, None).await;
     }
 
     /// Performs an HTTP DELETE request
-    pub async fn delete(&mut self, url: &str, payload: Option<&str>) -> Result<crate::client::Response, RequestError> {
-        return self.execute("DELETE", url, payload).await;
+    pub async fn delete(
+        &mut self,
+        url: &str,
+        payload: Option<&str>,
+    ) -> Result<crate::client::Response, RequestError> {
+        return self.execute(Method::Delete, url, payload).await;
     }
 
     /// Performs an HTTP PATCH request
-    pub async fn patch(&mut self, url: &str, payload: Option<&str>) -> Result<crate::client::Response, RequestError> {
-        return self.execute("PATCH", url, payload).await;
+    pub async fn patch(
+        &mut self,
+        url: &str,
+        payload: Option<&str>,
+    ) -> Result<crate::client::Response, RequestError> {
+        return self.execute(Method::Patch, url, payload).await;
     }
 
     /// Performs an HTTP POST request
@@ -161,7 +224,7 @@ impl<T: UpdateTokenTrait> Request<T> {
         url: &str,
         payload: Option<&str>,
     ) -> Result<crate::client::Response, RequestError> {
-        return self.execute("POST", url, payload).await;
+        return self.execute(Method::Post, url, payload).await;
     }
 
     /// Performs an HTTP PUT request
@@ -170,7 +233,7 @@ impl<T: UpdateTokenTrait> Request<T> {
         url: &str,
         payload: Option<&str>,
     ) -> Result<crate::client::Response, RequestError> {
-        return self.execute("PUT", url, payload).await;
+        return self.execute(Method::Put, url, payload).await;
     }
 
     ///  Executes a request
@@ -183,13 +246,13 @@ impl<T: UpdateTokenTrait> Request<T> {
     #[async_recursion::async_recursion]
     async fn execute(
         &mut self,
-        method: &str,
+        method: Method,
         url: &str,
         payload: Option<&'async_recursion str>,
     ) -> Result<crate::client::Response, RequestError> {
         let payload_actual = match payload {
             Some(payload) => payload,
-            None => ""
+            None => "",
         };
 
         match &self.ek {
@@ -227,12 +290,8 @@ impl<T: UpdateTokenTrait> Request<T> {
                         Ok(response) => match response.status {
                             reqwest::StatusCode::OK => match response.into::<crate::Token>() {
                                 Ok(tt) => {
-                                    self.token = Some(tt.clone());
-                                    token = tt.clone();
-                                    match &self.cb {
-                                        Some(callback) => callback.token_update(tt.clone()),
-                                        None => false
-                                    };
+                                    self.update_token(Some(tt.clone()));
+                                    token = self.token.clone().unwrap();
                                 }
                                 Err(_error) => return Err(RequestError::TokenExpired),
                             },
@@ -244,7 +303,7 @@ impl<T: UpdateTokenTrait> Request<T> {
 
                 // For requests with tokens, attempt to generate an Authorization struct
                 match crate::Authorization::from(
-                    method.to_string(),
+                    method.to_string().to_uppercase(),
                     url.to_string().clone(),
                     token.clone(),
                     Utc::now(),
@@ -288,10 +347,11 @@ impl<T: UpdateTokenTrait> Request<T> {
 
         let furi = format!("{}{}", self.endpoint, url);
         let mut builder: reqwest::RequestBuilder = match method {
-            "GET" => self.client.clone().get(furi),
-            "POST" => self.client.clone().post(furi),
-            "PUT" => self.client.clone().put(furi),
-            "DELETE" => self.client.clone().delete(furi),
+            Method::Get => self.client.clone().get(furi),
+            Method::Post => self.client.clone().post(furi),
+            Method::Put => self.client.clone().put(furi),
+            Method::Delete => self.client.clone().delete(furi),
+            Method::Patch => self.client.clone().patch(furi),
             _ => return Err(RequestError::InvalidArgument),
         };
 
@@ -328,9 +388,23 @@ impl<T: UpdateTokenTrait> Request<T> {
             }
         }
 
+        // Execute any before request implementation
+        builder = match &self.rt {
+            Some(rt) => rt.before(builder),
+            None => builder,
+        };
         builder = builder.headers(headers);
 
-        return self.do_request(builder, kp).await;
+        match self.do_request(builder, kp).await {
+            Ok(response) => match &self.rt {
+                Some(rt) => {
+                    rt.after(response.clone());
+                    return Ok(response);
+                },
+                None => return Ok(response)
+            },
+            Err(error) => return Err(error)
+        };
     }
 
     /// Internal method to perform the http request
