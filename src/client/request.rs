@@ -1,7 +1,10 @@
 use std::fmt;
 
 use chrono::Utc;
-use reqwest::{header::{HeaderMap, HeaderValue}, RequestBuilder};
+use reqwest::{
+    header::{HeaderMap, HeaderValue},
+    RequestBuilder,
+};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -50,9 +53,9 @@ pub enum RequestError {
 /// An `ncryptf::Client::Response` is emitted on success. The response automatically handles decrypting the response for your application.
 #[derive(Debug, Clone)]
 pub struct Request<UT, RT>
-    where
+where
     UT: UpdateTokenTrait,
-    RT: RequestTrait
+    RT: RequestTrait,
 {
     pub client: reqwest::Client,
     pub endpoint: String,
@@ -68,7 +71,7 @@ pub enum Method {
     Post,
     Put,
     Patch,
-    Delete
+    Delete,
 }
 
 impl fmt::Display for Method {
@@ -76,7 +79,6 @@ impl fmt::Display for Method {
         write!(f, "{:?}", self)
     }
 }
-
 
 pub trait UpdateTokenTrait: Send + Sync {
     /// Provides a post-callback // token update mechansim that can be controlled by the caller
@@ -103,7 +105,7 @@ impl<UT: UpdateTokenTrait, RT: RequestTrait> Request<UT, RT> {
     pub fn new_simple(
         client: reqwest::Client,
         endpoint: &str,
-        token: Option<crate::Token>
+        token: Option<crate::Token>,
     ) -> Self {
         return Self::new(client, endpoint, token, None, None);
     }
@@ -400,10 +402,10 @@ impl<UT: UpdateTokenTrait, RT: RequestTrait> Request<UT, RT> {
                 Some(rt) => {
                     rt.after(response.clone());
                     return Ok(response);
-                },
-                None => return Ok(response)
+                }
+                None => return Ok(response),
             },
-            Err(error) => return Err(error)
+            Err(error) => return Err(error),
         };
     }
 

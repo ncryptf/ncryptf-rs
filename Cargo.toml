@@ -24,19 +24,18 @@ serde_json = { version = "1", features = ["raw_value"] }
 constant_time_eq = { version = "^0.2" }
 hex = { version =  "^0.4" }
 rand = { version = "0.8.5" }
-rocket = { path = "./../../ncryptf/rocket.rs/core/lib", features = ["tls", "secrets", "json"], optional = true  }
-rocket_db_pools = { path = "./../../ncryptf/rocket.rs/contrib/db_pools/lib",  features = ["deadpool_redis"], optional = true }
-rocket_dyn_templates = { path = "./../../ncryptf/rocket.rs/contrib/dyn_templates" , features = ["handlebars"], optional = true }
+rocket = { path = "./../rocket.rs/core/lib", features = ["tls", "secrets", "json"], optional = true  }
+rocket_db_pools = { path = "./../rocket.rs/contrib/db_pools/lib",  features = ["deadpool_redis"], optional = true }
+rocket_dyn_templates = { path = "./../rocket.rs/contrib/dyn_templates" , features = ["handlebars"], optional = true }
 async-trait = { version = "^0.1", optional = true }
 async-std = { version = "^1.12", optional = true }
-reqwest = { version = "^0.11", features = ["json", "rustls-tls", "native-tls", "brotli", "gzip", "stream"], optional = true }
+reqwest = { version = "^0.11", default-features = false, features = ["json", "rustls-tls", "brotli", "gzip", "stream"], optional = true }
 tracing = { version = "^0.1", optional = true }
 async-recursion = { version = "^1.0", optional = true }
 anyhow = { version = "^1.0", optional = true }
 sea-orm-migration = { path = "./../sea-orm/sea-orm-migration", features = ["sqlx-mysql",  "runtime-tokio-rustls"], optional = true }
 sea-orm = { path = "./../sea-orm", features = [ "sqlx-mysql", "runtime-tokio-rustls", "macros" ], optional = true }
 sea-orm-rocket = { path = "./../sea-orm/sea-orm-rocket/lib", optional = true }
-
 
 [lib]
 name = "ncryptf"
@@ -48,7 +47,7 @@ rocket = ["dep:rocket", "dep:rocket_db_pools", "dep:async-trait", "dep:rocket_dy
 client = ["dep:reqwest", "dep:tracing", "dep:async-recursion"]
 
 [dev-dependencies]
-reqwest = { version = "^0.11", features = ["json", "blocking"] }
+reqwest = { version = "^0.11", default-features = false,  features = ["json", "blocking"] }
 redis = { version = "^0.21" }
 
 [badges]
