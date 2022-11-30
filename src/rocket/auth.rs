@@ -106,7 +106,7 @@ macro_rules! auth {
                                         date.unwrap().with_timezone(&$crate::rocket::Utc)
                                     },
                                     None => {
-                                        return$crate::rocket::request::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken));
+                                        return $crate::rocket::request::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken));
                                     }
                                 };
                                 date
@@ -127,38 +127,6 @@ macro_rules! auth {
                         ) {
                             Ok(auth) => {
                                 if auth.verify(params.hmac, $crate::rocket::NCRYPTF_DRIFT_ALLOWANCE) {
-                                    // If the header is ncryptf, then also check the signing public key and do a constant time check
-                                    match req.headers().get_one("Content-Type") {
-                                        Some(ct) => {
-                                            match ct {
-                                                $crate::rocket::NCRYPTF_CONTENT_TYPE => {
-                                                    let version = req.local_cache(|| $crate::rocket::NcryptfRequestVersion(2));
-                                                    if !body.eq("") && version.0 >= 2 {
-                                                        let raw_body_s = req.local_cache(|| $crate::rocket::NcryptfRawBody("".to_string()));
-                                                        let raw_body = &raw_body_s.0;
-                                                        match $crate::Response::get_signing_public_key_from_response($crate::rocket::base64::decode(raw_body).unwrap()) {
-                                                            Ok(public_key) => {
-                                                                let signature_pk = token.get_signature_public_key().unwrap();
-                                                                if !$crate::rocket::constant_time_eq::constant_time_eq(&public_key, &signature_pk) {
-                                                                    tracing::trace!("Signature constant time mismatch");
-                                                                    tracing::trace!("{:?}", &public_key);
-                                                                    tracing::trace!("{:?}", &signature_pk);
-                                                                    return $crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::SignatureInvalid));
-                                                                }
-                                                            },
-                                                            Err(error) => {
-                                                                tracing::trace!("{:?}", error.to_string());
-                                                                return $crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidRequest));
-                                                            }
-                                                        }
-                                                    }
-                                                },
-                                                _ => {}
-                                            }
-                                        },
-                                        None => {}
-                                    };
-
                                     match <$T>::get_user_from_token(token, dbs).await {
                                         Ok(user) => return $crate::rocket::Outcome::Success(*user),
                                         Err(_) => return $crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
