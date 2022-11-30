@@ -5,7 +5,7 @@ description = "Secure API authentication and end to end encryption."
 repository = "https://github.com/ncryptf/ncryptf-rs"
 license = "BSD-3-Clause"
 categories = ["cryptography", "authentication", "api-bindings"]
-version = "0.2.10"
+version = "0.2.11"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
