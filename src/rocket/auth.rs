@@ -143,12 +143,12 @@ macro_rules! auth {
                                                                     tracing::trace!("Signature constant time mismatch")
                                                                     tracing::trace!("{}", &public_key)
                                                                     tracing::trace!("{}", &signature_pk)
-                                                                    return $crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::SignatureInvalid))
+                                                                    return $crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::SignatureInvalid));
                                                                 }
                                                             },
                                                             Err(error) => {
                                                                 tracing::trace!(error.to_string());
-                                                                return $crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidRequest))
+                                                                return $crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidRequest));
                                                             }
                                                         }
                                                     }
