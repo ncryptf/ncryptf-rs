@@ -18,6 +18,7 @@ pub use rocket_db_pools::figment::Figment;
 pub enum TokenError {
     InvalidToken,
     SignatureInvalid,
+    InvalidRequest,
     ServerError,
 }
 
@@ -139,10 +140,16 @@ macro_rules! auth {
                                                             Ok(public_key) => {
                                                                 let signature_pk = token.get_signature_public_key().unwrap();
                                                                 if !$crate::rocket::constant_time_eq::constant_time_eq(&public_key, &signature_pk) {
-                                                                    return$crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::SignatureInvalid));
+                                                                    tracing::trace!("Signature constant time mismatch")
+                                                                    tracing::trace!("{}", &public_key)
+                                                                    tracing::trace!("{}", &signature_pk)
+                                                                    return $crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::SignatureInvalid))
                                                                 }
                                                             },
-                                                            Err(_) => return$crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::SignatureInvalid))
+                                                            Err(error) => {
+                                                                tracing::trace!(error.to_string());
+                                                                return $crate::rocket::Outcome::Failure(($crate::rocket::Status::Unauthorized, TokenError::InvalidRequest))
+                                                            }
                                                         }
                                                     }
                                                 },
