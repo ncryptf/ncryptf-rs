@@ -354,7 +354,6 @@ impl<UT: UpdateTokenTrait, RT: RequestTrait> Request<UT, RT> {
             Method::Put => self.client.clone().put(furi),
             Method::Delete => self.client.clone().delete(furi),
             Method::Patch => self.client.clone().patch(furi),
-            _ => return Err(RequestError::InvalidArgument),
         };
 
         match payload_actual {

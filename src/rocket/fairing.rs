@@ -1,5 +1,4 @@
 use rocket::{
-    data::{Limits, ToByteUnit},
     fairing::{Fairing as rocketairing, Info, Kind},
     Data, Request,
 };
@@ -25,7 +24,7 @@ impl rocketairing for Fairing {
         }
     }
 
-    async fn on_request(&self, req: &mut Request<'_>, data: &mut Data<'_>) {
+    async fn on_request(&self, req: &mut Request<'_>, _data: &mut Data<'_>) {
         // Global fairing allows us to utilize request guards for both Json<T>, plain text json, and a request guard for authentication
         if let Some(h) = req.headers().get_one("Content-Type") {
             // If the content type is JSON or vnd.ncryptf+json then we will consume data
@@ -35,10 +34,12 @@ impl rocketairing for Fairing {
             //
             // Other content types should work as-is without changes since we're only consuming this for specific content types
             if h.eq(crate::rocket::NCRYPTF_CONTENT_TYPE) || h.eq("application/json") {
-                let limit = req.limits().get("json").unwrap_or(10.megabytes());
-                let result = data.get_body(limit.as_u64() as usize).await;
-                let vec_data = result.to_vec();
-                let string = String::from_utf8(vec_data.clone()).unwrap();
+                let body_bytes = req.local_cache(|| rocket::HyperRawBodyBytes(Vec::<u8>::with_capacity(0)));
+                let string = match String::from_utf8(body_bytes.0.clone()) {
+                    Ok(s) => s,
+                    Err(error) => String::from(error.to_string())
+                };
+
                 req.local_cache(|| FairingConsumed(true));
 
                 let version = match req.method().to_string().to_uppercase().as_str() {
