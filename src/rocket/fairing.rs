@@ -45,12 +45,21 @@ impl rocketairing for Fairing {
                     "GET" => 2,
                     _ => match h {
                         crate::rocket::NCRYPTF_CONTENT_TYPE => {
-                            let d = base64::decode(string.clone()).unwrap();
+                            let d = match base64::decode(string.clone()) {
+                                Ok(d) => d,
+                                Err(error) => {
+                                    tracing::error!("WARNING: Could not decipher request body :: {}", error.to_string());
+                                    tracing::trace!("Raw Request Body: {}", string);
+                                    let d: Vec<u8> = vec![0];
+                                    d
+                                }
+                            };
+
                             match crate::Response::get_version(d) {
                                 Ok(version) => version,
                                 Err(_) => 1,
                             }
-                        }
+                        },
                         _ => 2,
                     },
                 };
