@@ -1,5 +1,5 @@
 use rocket::{
-    data::Limits,
+    data::{Limits, ToByteUnit},
     fairing::{Fairing as rocketairing, Info, Kind},
     Data, Request,
 };
@@ -35,7 +35,7 @@ impl rocketairing for Fairing {
             //
             // Other content types should work as-is without changes since we're only consuming this for specific content types
             if h.eq(crate::rocket::NCRYPTF_CONTENT_TYPE) || h.eq("application/json") {
-                let limit = req.limits().get("json").unwrap_or(Limits::JSON);
+                let limit = req.limits().get("json").unwrap_or(10.megabytes());
                 let result = data.get_body(limit.as_u64() as usize).await;
                 let vec_data = result.to_vec();
                 let string = String::from_utf8(vec_data.clone()).unwrap();
