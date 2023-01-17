@@ -17,9 +17,9 @@ The rust ncryptf bindings are intended to be API similar to other language bindi
 
 ## Installing
 
-You can add ncryptf to your project via cargo:
+You can add ncryptf to your project via cargo to your Cargo.toml
 ```
-cargo add ncryptf
+ncryptf-rs = { git = "github.com/ncryptf/ncryptf-rs" }
 ```
 
 Ncryptf supports 2 optional features:
@@ -72,17 +72,31 @@ common
 In your `mod.rs` or `lib.rs` have the following:
 ```rust
 pub mod ncryptflib
-pub use ncryptf::rocketfw as rocket;
-pub use ncryptf::rocket_db_pools as rocket_db_pools;
-pub use ncryptf::rocket_dyn_templates as rocket_dyn_templates;
-pub use ncryptf::sea_orm as sea_orm;
-pub use ncryptf::sea_orm_migration as sea_orm_migration;
-pub use ncryptf::sea_orm_rocket as sea_orm_rocket;
+pub use ncryptf::{
+    rocket_db_pools,
+    rocket_dyn_templates,
+    rocketfw as rocket,
+    sea_orm,
+    sea_orm_migration,
+    sea_orm_rocket,
+};
 ```
 
 Then in your ncryptflib.rs have the following:
 ```rust
-pub use ncryptf::{Keypair, Token, Authorization, Request, Response, NcryptfError, ek_route, auth, client, rocket};
+pub use ncryptf::{
+    auth,
+    client,
+    ek_route,
+    rocket,
+    Authorization,
+    Keypair,
+    NcryptfError,
+    Request,
+    Response,
+    Token,
+    randombytes_buf
+};
 ```
 
 And elsewhere in your code you can then `pub use ncryptflib as ncryptf` to have the standard library available under the normal namespaces without collisions.
