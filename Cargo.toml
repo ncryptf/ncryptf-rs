@@ -8,7 +8,8 @@ categories = ["cryptography", "authentication", "api-bindings"]
 version = "0.2.11"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[registries.crates-io]
+protocol = "sparse"
 
 [dependencies]
 libsodium-sys-stable = { version = "1.19.22" }
@@ -26,7 +27,7 @@ hex = { version =  "^0.4" }
 rand = { version = "0.8.5" }
 rocket = { path = "./../rocket.rs/core/lib", features = ["tls", "secrets", "json"], optional = true  }
 rocket_db_pools = { path = "./../rocket.rs/contrib/db_pools/lib",  features = ["deadpool_redis"], optional = true }
-rocket_dyn_templates = { path = "./../rocket.rs/contrib/dyn_templates" , features = ["handlebars"], optional = true }
+rocket_dyn_templates = { path = "./../rocket.rs/contrib/dyn_templates", features = ["handlebars"], optional = true }
 async-trait = { version = "^0.1", optional = true }
 async-std = { version = "^1.12", optional = true }
 reqwest = { version = "^0.11", default-features = false, features = ["json", "rustls-tls", "brotli", "gzip", "stream"], optional = true }

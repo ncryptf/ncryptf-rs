@@ -1,5 +1,3 @@
-#![doc(include_str = "../README.md")]
-
 /// Ncryptf version 2 magic header
 const VERSION_2_HEADER: &str = "DE259002";
 const NCRYPTF_CURRENT_VERSION: i8 = 2;
