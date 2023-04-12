@@ -77,10 +77,10 @@ impl Response {
             0;
             response.clone().len() - (CRYPTO_BOX_MACBYTES as usize)
         ]);
-        let sk: [u8; (CRYPTO_BOX_SECRETKEYBYTES as usize)] =
+        let sk: [u8; CRYPTO_BOX_SECRETKEYBYTES as usize] =
             self.secret_key.clone().try_into().unwrap();
-        let pk: [u8; (CRYPTO_BOX_PUBLICKEYBYTES as usize)] = public_key.try_into().unwrap();
-        let n: [u8; (CRYPTO_BOX_NONCEBYTES as usize)] = nonce.try_into().unwrap();
+        let pk: [u8; CRYPTO_BOX_PUBLICKEYBYTES as usize] = public_key.try_into().unwrap();
+        let n: [u8; CRYPTO_BOX_NONCEBYTES as usize] = nonce.try_into().unwrap();
 
         let result: i32 = unsafe {
             crypto_box_open_easy(
@@ -117,7 +117,7 @@ impl Response {
         let payload = response.get(0..length - 64).unwrap().to_vec();
         let checksum = response.get(length - 64..length).unwrap().to_vec();
 
-        let s: &[u8; (CRYPTO_BOX_NONCEBYTES as usize)] = &nonce.clone().try_into().unwrap();
+        let s: &[u8; CRYPTO_BOX_NONCEBYTES as usize] = &nonce.clone().try_into().unwrap();
         let input = payload.clone();
         let mut hash: [u8; 64] = vec![0; 64].try_into().unwrap();
 
@@ -174,8 +174,8 @@ impl Response {
             )));
         }
 
-        let sig: [u8; (CRYPTO_SIGN_BYTES as usize)] = signature.try_into().unwrap();
-        let pk: [u8; (CRYPTO_SIGN_PUBLICKEYBYTES as usize)] = public_key.try_into().unwrap();
+        let sig: [u8; CRYPTO_SIGN_BYTES as usize] = signature.try_into().unwrap();
+        let pk: [u8; CRYPTO_SIGN_PUBLICKEYBYTES as usize] = public_key.try_into().unwrap();
         let result = unsafe {
             crypto_sign_verify_detached(
                 sig.as_ptr(),

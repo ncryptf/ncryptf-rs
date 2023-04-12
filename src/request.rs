@@ -75,11 +75,11 @@ impl Request {
                 };
 
                 // Extract the public key from the secret key
-                let mut ipk: [u8; (CRYPTO_BOX_PUBLICKEYBYTES as usize)] =
+                let mut ipk: [u8; CRYPTO_BOX_PUBLICKEYBYTES as usize] =
                     vec![0; CRYPTO_BOX_PUBLICKEYBYTES as usize]
                         .try_into()
                         .unwrap();
-                let csk: [u8; (CRYPTO_BOX_SECRETKEYBYTES as usize)] =
+                let csk: [u8; CRYPTO_BOX_SECRETKEYBYTES as usize] =
                     self.secret_key.clone().try_into().unwrap();
                 let _result = unsafe { crypto_scalarmult_base(ipk.as_mut_ptr(), csk.as_ptr()) };
 
@@ -88,11 +88,11 @@ impl Request {
                 }
 
                 // Convert the signature secret key, into a public key
-                let mut isk: [u8; (CRYPTO_SIGN_PUBLICKEYBYTES as usize)] =
+                let mut isk: [u8; CRYPTO_SIGN_PUBLICKEYBYTES as usize] =
                     vec![0; CRYPTO_SIGN_PUBLICKEYBYTES as usize]
                         .try_into()
                         .unwrap();
-                let ssk: [u8; (CRYPTO_SIGN_SECRETKEYBYTES as usize)] =
+                let ssk: [u8; CRYPTO_SIGN_SECRETKEYBYTES as usize] =
                     self.signature_secret_key.clone().try_into().unwrap();
                 let _result =
                     unsafe { crypto_sign_ed25519_sk_to_pk(isk.as_mut_ptr(), ssk.as_ptr()) };
@@ -114,7 +114,7 @@ impl Request {
                 payload.append(&mut isk.to_vec());
                 payload.append(&mut signature);
 
-                let s: &[u8; (CRYPTO_BOX_NONCEBYTES as usize)] = &n.clone().try_into().unwrap();
+                let s: &[u8; CRYPTO_BOX_NONCEBYTES as usize] = &n.clone().try_into().unwrap();
                 let input = payload.clone();
                 let mut hash: [u8; 64] = vec![0; 64].try_into().unwrap();
 
@@ -153,10 +153,10 @@ impl Request {
         let len = message.len();
 
         let mut ciphertext = Box::new(vec![0u8; len + (CRYPTO_BOX_MACBYTES as usize)]);
-        let sk: [u8; (CRYPTO_BOX_SECRETKEYBYTES as usize)] =
+        let sk: [u8; CRYPTO_BOX_SECRETKEYBYTES as usize] =
             self.secret_key.clone().try_into().unwrap();
-        let pk: [u8; (CRYPTO_BOX_PUBLICKEYBYTES as usize)] = public_key.clone().try_into().unwrap();
-        let n: [u8; (CRYPTO_BOX_NONCEBYTES as usize)] = nonce.clone().try_into().unwrap();
+        let pk: [u8; CRYPTO_BOX_PUBLICKEYBYTES as usize] = public_key.clone().try_into().unwrap();
+        let n: [u8; CRYPTO_BOX_NONCEBYTES as usize] = nonce.clone().try_into().unwrap();
 
         let result: i32 = unsafe {
             crypto_box_easy(
@@ -187,7 +187,7 @@ impl Request {
     /// Signs the given data, then returns a detached signature
     pub fn sign(&self, data: String) -> Result<Vec<u8>, Error> {
         let mut signature = [0u8; (CRYPTO_SIGN_BYTES as usize)];
-        let key: [u8; (CRYPTO_SIGN_SECRETKEYBYTES as usize)] =
+        let key: [u8; CRYPTO_SIGN_SECRETKEYBYTES as usize] =
             self.signature_secret_key.clone().try_into().unwrap();
 
         let mut signature_size = signature.len() as u64;
