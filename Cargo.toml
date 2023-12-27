@@ -14,7 +14,7 @@ protocol = "sparse"
 [dependencies]
 libsodium-sys-stable = { version = "^1.20" }
 thiserror = { version = "^1.0" }
-chrono = { version = "^0.4" }
+chrono = { version = "=0.4.30" }
 base64 = { version = "^0.13" }
 sha256 = { version = "1.0.3" }
 hkdf = { version = "^0.12" }
@@ -31,7 +31,7 @@ rocket_dyn_templates = { path = "./../rocket.rs/contrib/dyn_templates", features
 async-trait = { version = "^0.1", optional = true }
 async-std = { version = "^1.12", optional = true }
 reqwest = { version = "^0.11", default-features = false, features = ["json", "rustls-tls", "brotli", "gzip", "stream"], optional = true }
-tracing = { version = "^0.1", optional = true }
+tracing = { version = "^0.1" }
 async-recursion = { version = "^1.0", optional = true }
 anyhow = { version = "^1.0", optional = true }
 sea-orm-migration = { path = "./../sea-orm/sea-orm-migration", features = ["sqlx-mysql",  "runtime-tokio-rustls", "sqlx-sqlite"], optional = true }
@@ -45,7 +45,7 @@ name = "ncryptf"
 default = []
 sea-orm = ["dep:sea-orm", "dep:sea-orm-migration", "dep:sea-orm-rocket"]
 rocket = ["dep:rocket", "dep:rocket_db_pools", "dep:async-trait", "dep:rocket_dyn_templates", "anyhow"]
-client = ["dep:reqwest", "dep:tracing", "dep:async-recursion"]
+client = ["dep:reqwest", "dep:async-recursion"]
 
 [dev-dependencies]
 reqwest = { version = "^0.11", default-features = false,  features = ["json", "blocking"] }
