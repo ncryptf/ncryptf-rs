@@ -9,6 +9,7 @@ pub struct TestCase {
 }
 
 pub fn get_date() -> chrono::DateTime<chrono::offset::Utc> {
+    #[allow(deprecated)]
     return Utc.timestamp(1533310068, 0);
 }
 

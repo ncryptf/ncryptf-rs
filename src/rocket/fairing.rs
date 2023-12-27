@@ -1,7 +1,7 @@
-use std::{sync::Arc, pin::Pin};
+use std::sync::Arc;
 use rocket::{
     fairing::{Fairing as rocketairing, Info, Kind},
-    Data, Request, tokio::io::AsyncRead,
+    Data, Request
 };
 
 /// Indicates in request.local_cache if the fairing consumed the DataStream or not
@@ -26,6 +26,7 @@ impl rocketairing for Fairing {
     }
 
     async fn on_request(&self, req: &mut Request<'_>,  data: &mut Data<'_>) {
+
         // Global fairing allows us to utilize request guards for both Json<T>, plain text json, and a request guard for authentication
         if let Some(h) = req.headers().get_one("Content-Type") {
             // If the content type is JSON or vnd.ncryptf+json then we will consume data
@@ -39,19 +40,20 @@ impl rocketairing for Fairing {
                 let raw_body = Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
                 let raw_body_cp = raw_body.clone();
                 data.chain_inspect(move |bytes| {
-                    *raw_body.lock().unwrap() = bytes.to_vec()
+                    *raw_body.lock().unwrap() = bytes.to_vec();
                 });
+
+                return;
 
                 let string = match String::from_utf8(raw_body_cp.lock().unwrap().to_vec()) {
                     Ok(s) => {
-                        req.local_cache(|| FairingConsumed(true));
                         s
                     },
                     Err(error) => String::from(error.to_string())
                 };
 
+                req.local_cache(|| FairingConsumed(true));
                 println!("Captured String: {:?}", string);
-
 
                 let version = match req.method().to_string().to_uppercase().as_str() {
                     "GET" => 2,

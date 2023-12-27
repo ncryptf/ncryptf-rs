@@ -1,5 +1,7 @@
 use std::{error, fmt, io};
 
+use crate::rocket::NcryptfRawBody;
+
 use super::{
     fairing::FairingConsumed, get_cache, EncryptionKey, RequestPublicKey, RequestSigningPublicKey,
     NCRYPTF_CONTENT_TYPE,
@@ -267,8 +269,8 @@ impl<'r, T: Deserialize<'r>> Json<T> {
     }
 
     async fn from_data(req: &'r Request<'_>, data: Data<'r>) -> Result<Self, Error<'r>> {
-        let is_consumed = req.local_cache(|| FairingConsumed(false));
-        match is_consumed.0 {
+        let is_consumed =false; //  req.local_cache(|| FairingConsumed(false));
+        match is_consumed {
             // If the fairing is attached and we have already decrypted the string, we can simply return it as is without needing to decrypt it a second time
             true => return Self::from_str(req.local_cache(|| return "".to_string())),
             false => {
@@ -281,6 +283,8 @@ impl<'r, T: Deserialize<'r>> Json<T> {
                     }
                     Err(error) => return Err(Error::Io(error)),
                 };
+
+                req.local_cache(|| NcryptfRawBody(string.clone()));
 
                 match Self::deserialize_req_from_string(req, string) {
                     Ok(s) => {

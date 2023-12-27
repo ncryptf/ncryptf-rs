@@ -25,15 +25,7 @@ pub mod rocket;
 pub mod client;
 
 #[cfg(feature = "rocket")]
-pub extern crate rocket as rocketfw;
-
-#[cfg(feature = "rocket")]
-pub extern crate rocket_db_pools;
-
-#[cfg(feature = "rocket")]
 pub use rocket_db_pools::*;
 
-#[cfg(feature = "rocket")]
-pub extern crate rocket_dyn_templates;
 #[cfg(feature = "rocket")]
 pub use rocket_dyn_templates::*;
