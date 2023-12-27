@@ -11,6 +11,7 @@ use rocket::{
     response::{self, Responder, Response},
     Data, Request,
 };
+
 use serde::{Deserialize, Serialize};
 
 #[allow(unused_imports)] // for rust-analyzer
@@ -300,15 +301,16 @@ impl<'r, T: Deserialize<'r>> FromData<'r> for Json<T> {
         match Self::from_data(req, data).await {
             Ok(value) => Outcome::Success(value),
             Err(Error::Io(e)) if e.kind() == io::ErrorKind::UnexpectedEof => {
-                Outcome::Failure((Status::PayloadTooLarge, Error::Io(e)))
+                Outcome::Error((Status::PayloadTooLarge, Error::Io(e)))
+                //Outcome::Failure((Status::PayloadTooLarge, Error::Io(e)))
             }
             Err(Error::Parse(s, e)) if e.classify() == serde_json::error::Category::Data => {
                 let sttr = req.local_cache(|| return "".to_string());
                 dbg!(sttr);
                 dbg!(e.to_string());
-                Outcome::Failure((Status::UnprocessableEntity, Error::Parse(s, e)))
+                Outcome::Error((Status::UnprocessableEntity, Error::Parse(s, e)))
             }
-            Err(e) => Outcome::Failure((Status::BadRequest, e)),
+            Err(e) => Outcome::Error((Status::BadRequest, e)),
         }
     }
 }

@@ -66,6 +66,7 @@ impl Authorization {
         let sr: &[u8; 32] = &s.clone().try_into().unwrap();
         let ikm: &[u8; 32] = &token.clone().ikm.try_into().unwrap();
         let signature = Signature::derive(m, uri, s.clone(), date, payload, v);
+
         let hkdf = Hkdf::<Sha256>::new(Some(sr), ikm);
         let mut okm = [0u8; 32];
         match hkdf.expand(&AUTH_INFO.as_bytes(), &mut okm) {
@@ -78,7 +79,7 @@ impl Authorization {
         };
 
         let hk = okm.to_vec();
-        let hkdf_string = hex::encode(hk).to_string().to_lowercase();
+        let hkdf_string = hex::encode(hk.clone()).to_string().to_lowercase();
 
         let mut hmac = Hmac::<Sha256>::new_from_slice(hkdf_string.as_bytes())
             .expect("HMAC can take key of any size");

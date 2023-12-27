@@ -27,6 +27,7 @@ fn test_v1_hmac() {
         let header = a.get_header();
         let actual = header.as_str();
         let expected = hmacs.get(i).unwrap().as_str();
+
         assert!(actual.eq(expected));
     }
 }
@@ -49,6 +50,7 @@ fn test_v2_hmac() {
             Some(salt.clone()),
             Some(2),
         );
+
 
         assert!(auth.is_ok());
         let a = auth.unwrap();

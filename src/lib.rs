@@ -37,20 +37,3 @@ pub use rocket_db_pools::*;
 pub extern crate rocket_dyn_templates;
 #[cfg(feature = "rocket")]
 pub use rocket_dyn_templates::*;
-
-#[cfg(feature = "sea-orm")]
-pub extern crate sea_orm;
-#[cfg(feature = "sea-orm")]
-pub use sea_orm::*;
-
-#[cfg(feature = "sea-orm")]
-pub extern crate sea_orm_migration;
-
-#[cfg(feature = "sea-orm")]
-pub use sea_orm_migration::*;
-
-#[cfg(all(feature = "sea-orm", feature = "rocket"))]
-pub extern crate sea_orm_rocket;
-
-#[cfg(all(feature = "sea-orm", feature = "rocket"))]
-pub use sea_orm_rocket::*;
