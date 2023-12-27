@@ -1,8 +1,7 @@
 use ncryptf::{ek_route, randombytes_buf, rocket::ExportableEncryptionKeyData};
 use redis::Commands;
-use rocket::{http::Header, local::blocking::Client, serde::Serialize};
+use rocket::{http::Header, local::blocking::Client, serde::Serialize, fairing::AdHoc};
 use serde::Deserialize;
-use parking_lot::Mutex;
 use ncryptf::rocket::Fairing as NcryptfFairing;
 use rocket_db_pools::{deadpool_redis, Database};
 use std::sync::Arc;
@@ -113,7 +112,7 @@ fn setup() -> Client {
         .attach(RedisDb::init())
         .mount("/", routes![echo, auth_echo, echo2])
         .mount("/ncryptf", routes![ncryptf_ek_route]);
-
+    
     return match Client::tracked(rocket) {
         Ok(client) => client,
         Err(_error) => {

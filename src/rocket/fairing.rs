@@ -13,48 +13,6 @@ pub struct NcryptfRequestVersion(pub i32);
 /// Cached Ncryptf raw body
 pub struct NcryptfRawBody(pub String);
 
-/// DataTransformers implementation
-#[derive(Debug, Clone)]
-pub struct NcryptfData {
-    buffer: Vec<u8>,
-    output: Option<std::io::Cursor<Vec<u8>>>
-}
-
-impl NcryptfData {
-    pub fn new() -> Self {
-        Self {
-            buffer: Vec::new(),
-            output: None
-        }
-    }
-}
-
-impl rocket::data::Transform for NcryptfData {
-    fn poll_transform(
-        mut self: std::pin::Pin<&mut Self>,
-        buf: &mut rocket::data::TransformBuf<'_, '_>,
-    ) -> std::io::Result<()> {
-        println!("Poll transform called");
-        let mut buffer = Vec::<u8>::new();
-        self.buffer.extend_from_slice(buf.fresh());
-        Ok(())
-    }
-
-    fn poll_finish(
-        mut self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-        buf: &mut rocket::data::TransformBuf<'_, '_>,
-    ) -> std::task::Poll<std::io::Result<()>> {
-        println!("Poll finish called");
-        if self.output.is_none() {
-            self.output = Some(std::io::Cursor::new(self.buffer.clone()));
-        }
-
-        let cursor = self.output.as_mut().unwrap();
-        Pin::new(cursor).poll_read(cx, buf)
-    }
-}
-
 /// Ncryptf Fairing necessary for implemeting AuthorizationTrait
 pub struct Fairing;
 
@@ -77,23 +35,23 @@ impl rocketairing for Fairing {
             //
             // Other content types should work as-is without changes since we're only consuming this for specific content types
             if h.eq(crate::rocket::NCRYPTF_CONTENT_TYPE) || h.eq("application/json") {
+                // This should work in Rocket 0.6...
+                let raw_body = Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
+                let raw_body_cp = raw_body.clone();
+                data.chain_inspect(move |bytes| {
+                    *raw_body.lock().unwrap() = bytes.to_vec()
+                });
 
-                println!("{:?}", data.peek(100).await);
-                let m = NcryptfData::new();
-                data.chain_transform(m);
-
-                let string = String::from("");
-                println!("{:?}", data.peek(100).await);
-                /*
-                let string = match String::from_utf8(m.clone().d.to_vec()) {
-                    Ok(s) => s,
+                let string = match String::from_utf8(raw_body_cp.lock().unwrap().to_vec()) {
+                    Ok(s) => {
+                        req.local_cache(|| FairingConsumed(true));
+                        s
+                    },
                     Err(error) => String::from(error.to_string())
                 };
-                */
 
                 println!("Captured String: {:?}", string);
 
-                req.local_cache(|| FairingConsumed(true));
 
                 let version = match req.method().to_string().to_uppercase().as_str() {
                     "GET" => 2,

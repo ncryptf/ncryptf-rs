@@ -83,6 +83,9 @@ macro_rules! auth {
 
                 let body = req.local_cache(|| return "".to_string());
 
+                // This requires the request body to parse, and is triggered before from_data()
+                println!("Request Body: {:?}", body);
+
                 // Retrieve the Authorization header
                 let header: String = match req.headers().get_one("Authorization") {
                     Some(h) => h.to_string(),
