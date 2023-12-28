@@ -1,6 +1,6 @@
 use ncryptf::{ek_route, randombytes_buf, rocket::ExportableEncryptionKeyData};
 use redis::Commands;
-use rocket::{http::Header, local::blocking::Client, serde::Serialize, fairing::AdHoc};
+use rocket::{http::Header, local::blocking::Client, serde::Serialize};
 use serde::Deserialize;
 use rocket_db_pools::{deadpool_redis, Database};
 
@@ -71,7 +71,7 @@ fn echo(data: ncryptf::rocket::Json<TestStruct>) -> ncryptf::rocket::Json<TestSt
 fn auth_echo(
     data: ncryptf::rocket::RequestData<User> // Satisfying the reqest guard is sufficient to verify the request can be parsed
 ) ->  ncryptf::rocket::Json<TestStruct> {
-    return ncryptf::rocket::Json::<TestStruct>::from_str(data.data.as_str()).unwrap();
+    return data.get_data::<TestStruct>().unwrap();
 }
 
 ncryptf::auth!(User);
@@ -116,12 +116,7 @@ fn setup() -> Client {
     let rocket = rocket::custom(config)
         .attach(RedisDb::init())
         .mount("/", routes![echo, auth_echo, echo2, auth_only])
-        .mount("/ncryptf", routes![ncryptf_ek_route])
-        .attach(AdHoc::on_request("transforms", |_req, data| Box::pin(async {
-            data.chain_inspect(move |_| {
-                println!("chain inspect occured");
-            });
-        })));
+        .mount("/ncryptf", routes![ncryptf_ek_route]);
     
     return match Client::untracked(rocket) {
         Ok(client) => client,
@@ -529,59 +524,4 @@ fn test_echo_large_body() {
     let message = r.decrypt(bbody, None, None);
     assert!(message.is_ok());
     assert_eq!(message.unwrap(), json.to_string());
-}
-
-
-use parking_lot::Mutex;
-use ubyte::ToByteUnit;
-use std::sync::Arc;
-use rocket::http::Method;
-use rocket::{route, Route, Data, Response, Request};
-#[test]
-fn test_transform_series() {
-    fn handler<'r>(_: &'r Request<'_>, data: Data<'r>) -> route::BoxFuture<'r> {
-        Box::pin(async move {
-            data.open(128.bytes()).stream_to(rocket::tokio::io::sink()).await.expect("read ok");
-            route::Outcome::Success(Response::new())
-        })
-    }
-
-    #[post("/echo", data = "<data>")]
-    fn echo(data: String) -> String {
-        String::from("Hello, World")
-    }
-
-    let raw_data: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
-    let rocket = crate::rocket::build()
-        .manage(raw_data.clone())
-        .mount("/", routes![echo])
-        .mount("/", vec![Route::new(Method::Post, "/", handler)])
-        .attach(AdHoc::on_request("transforms", |req, data| Box::pin(async {
-            let raw_data = req.rocket().state::<Arc<Mutex<Vec<u8>>>>().cloned().unwrap();
-            data.chain_inspect(move |bytes| { *raw_data.lock() = bytes.to_vec(); 
-            
-                println!("chain inspect occured");
-            });
-        })));
-
-    // Make sure nothing has happened yet.
-    assert!(raw_data.lock().is_empty());
-
-    // Check that nothing happens if the data isn't read.
-    let client = Client::untracked(rocket).unwrap();
-    client.get("/").body("Hello, world!").dispatch();
-    assert!(raw_data.lock().is_empty());
-
-    // Check inspect + hash + inspect + inspect.
-    client.post("/").body("Hello, world!").dispatch();
-    assert_eq!(raw_data.lock().as_slice(), "Hello, world!".as_bytes());
-
-    // Check inspect + hash + inspect + inspect, round 2.
-    let string = "Rocket, Rocket, where art thee? Oh, tis in the sky, I see!";
-    client.post("/").body(string).dispatch();
-    assert_eq!(raw_data.lock().as_slice(), string.as_bytes());
-
-    let s2 = "Hello, World2";
-    client.post("/echo").body(s2).dispatch();
-    assert_eq!(raw_data.lock().as_slice(), s2.as_bytes());
 }

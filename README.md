@@ -36,27 +36,8 @@ Ncryptf uses a modified variant of rocket.rs (0.5.0-rc: see https://github.com/c
 If you are using rocket.rs `proc_macro` in your `main.rs`, you will still need to import the macro.
 
 ```rust
-rocket = { git ="https://github.com/charlesportwoodii/rocket.rs", branch = "peek_buffer", features = ["tls", "secrets", "json"] }
+rocket = {  features = ["tls", "secrets", "json"] }
 ```
-
-However if you are using the library mapping section outlined below, your app will still use that variant. This is only necessary if you want rocket.rs' global macro.
-
-#### Rocket Db Pools
-Similarly to rocket, rocket-db-pools are also re-exported as a convenience
-
-#### Rocket Dyn Templates
-Similarly to rocket, rocket-dyn-templates are also re-exported as a convenience
-
-#### Sea ORM
-If you are using `sea-orm`, enable the `sea-orm` feature and you can use the re-exported SeaORM libraries customized for Rocket and ncryptf
-
-```rust
-pub use ncryptf::sea_orm as sea_orm;
-pub use ncryptf::sea_orm_migration as sea_orm_migration;
-pub use ncryptf::sea_orm_rocket as sea_orm_rocket;
-```
-
-> NOTE: These re-exports will be removed once Rocket implements a in-framework way of reading the request buffer.
 
 ### Library Mapping
 When using the ncryptf re-exports by default the imported struct names will be namespaced under `ncryptf::<lib>`, which can be confusing to rust-analyzer, and the developer. To make rust-analyzer and the compiler more sane, consider using a `common` workspace that re-exports both ncryptf, rocket, and any other features.
@@ -262,24 +243,26 @@ If you have enabled the `client` feature, you can also use that to more simply p
 
 This library additional provides functionality to handle authentication requests fo you, including parsing, and verification with Rocket.rs. Implementation of this can be done as follows.
 
-1. Attach `ncryptf::rocket::Fairing` to your Rocket<Build>
-```rust
-use ncryptf::rocket::Fairing as NcryptfFairing;
-let rocket = rocket::custom(config)
-        .attach(NcryptfFairing)
-```
-
-2. Have your user entity impplement the `ncryptf::rocket::AuthorizationTrait` async_trait.
-3. At the end of your User entity implementation, run the following macro to bind the FromRequest Trait.
+1. Have your user entity impplement the `ncryptf::rocket::AuthorizationTrait` async_trait.
+2. At the end of your User entity implementation, run the following macro to bind the FromRequest Trait.
 ```rust
 ncryptf::auth!(User);
 ```
 
-4. Your request can now retrieve the User entity as part of a Rocket request guard.
+3. Your request can now retrieve the User entity as part of a Rocket request guard.
 ```rust
-#[post("/auth_echo", data="<data>")]
+#[get("/")]
 fn auth_echo( _user: User){
     dbg!(_user);
+}
+```
+
+4. For requests with a body, you can extract the identity and the request data with the data guard:
+```rust
+#[post("/", data = "<data>")]
+fn auth_echo(data = ncryptf::rocket::RequestData<User>){
+    let user: User = data.get_identity();
+    let s: ncryptf::rocket::Json::<T> = data.get_data();
 }
 ```
 
