@@ -326,23 +326,23 @@ impl<'r, T: Serialize> Responder<'r, 'static> for JsonResponse<T> {
     }
 }
 
-pub(crate) async fn parse_body<'r, T: Deserialize<'r>>(req: &'r Request<'_>, data: Data<'r>) -> Result<Json<T>, Error<'r>> {
+pub async fn parse_body<'r, T: Deserialize<'r>>(req: &'r Request<'_>, data: Data<'r>) -> Result<Json<T>, Error<'r>> {
     let limit = req.limits().get("json").unwrap_or(Limits::JSON);
-        let string = match data.open(limit).into_string().await {
-            Ok(s) if s.is_complete() => s.into_inner(),
-            Ok(_) => {
-                let eof = io::ErrorKind::UnexpectedEof;
-                return Err(Error::Io(io::Error::new(eof, "data limit exceeded")));
-            }
-            Err(error) => return Err(Error::Io(error)),
-        };
+    let string = match data.open(limit).into_string().await {
+        Ok(s) if s.is_complete() => s.into_inner(),
+        Ok(_) => {
+            let eof = io::ErrorKind::UnexpectedEof;
+            return Err(Error::Io(io::Error::new(eof, "data limit exceeded")));
+        }
+        Err(error) => return Err(Error::Io(error)),
+    };
 
-        match Json::<T>::deserialize_req_from_string(req, string) {
-            Ok(s) => {
-                return Json::<T>::from_str(req.local_cache(|| return s));
-            }
-            Err(error) => return Err(error),
-        };
+    match Json::<T>::deserialize_req_from_string(req, string) {
+        Ok(s) => {
+            return Json::<T>::from_str(req.local_cache(|| return s));
+        }
+        Err(error) => return Err(error),
+    };
 }
 
 pub fn respond_to_with_ncryptf<'r, 'a, T: serde::Serialize>(

@@ -14,11 +14,11 @@ pub struct RequestPublicKey(pub Vec<u8>);
 pub struct RequestSigningPublicKey(pub Vec<u8>);
 
 mod json;
-pub use json::{respond_to_with_ncryptf, Error as JsonError, Json, JsonResponse};
+pub use json::{respond_to_with_ncryptf, Error as JsonError, Json, JsonResponse, parse_body};
 mod ek;
 pub use ek::{EncryptionKey, ExportableEncryptionKeyData};
 mod auth;
-pub use auth::{AuthorizationTrait, TokenError, Identity, *};
+pub use auth::{AuthorizationTrait, TokenError, RequestData, *};
 
 use rocket_db_pools::deadpool_redis::redis;
 

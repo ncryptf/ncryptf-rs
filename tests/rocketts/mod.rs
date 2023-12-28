@@ -69,9 +69,20 @@ fn echo(data: ncryptf::rocket::Json<TestStruct>) -> ncryptf::rocket::Json<TestSt
 
 #[post("/auth_echo", data = "<data>")]
 fn auth_echo(
-    data: ncryptf::rocket::Identity<User, TestStruct> // Satisfying the reqest guard is sufficient to verify the request can be parsed
+    data: ncryptf::rocket::RequestData<User> // Satisfying the reqest guard is sufficient to verify the request can be parsed
 ) ->  ncryptf::rocket::Json<TestStruct> {
-    return data.data;
+    return ncryptf::rocket::Json::<TestStruct>::from_str(data.data.as_str()).unwrap();
+}
+
+ncryptf::auth!(User);
+#[get("/auth_only")]
+fn auth_only(
+    _user: User
+) -> ncryptf::rocket::Json<TestStruct> {
+    let t = TestStruct { 
+        hello: "world".to_string()
+    };
+    return ncryptf::rocket::Json::<TestStruct>(t);
 }
 
 /// Setup helper function
@@ -98,13 +109,13 @@ fn setup() -> Client {
                 idle_timeout: None,
             },
         ))
-        .merge(("log_level", rocket::config::LogLevel::Debug));
+        .merge(("log_level", rocket::config::LogLevel::Normal));
 
     ek_route!(RedisDb);
 
     let rocket = rocket::custom(config)
         .attach(RedisDb::init())
-        .mount("/", routes![echo, auth_echo, echo2])
+        .mount("/", routes![echo, auth_echo, echo2, auth_only])
         .mount("/ncryptf", routes![ncryptf_ek_route])
         .attach(AdHoc::on_request("transforms", |_req, data| Box::pin(async {
             data.chain_inspect(move |_| {
@@ -348,6 +359,55 @@ fn test_auth_echo_plain_to_plain() {
         .header(Header::new("Content-Type", "application/json"))
         .header(Header::new("Accept", "application/json"))
         .dispatch();
+
+    // We should get an HTTP 200 back
+    assert_eq!(response.status().code, 200);
+    let body = response.into_string().unwrap();
+    assert_eq!(body, json.to_string());
+}
+
+#[test]
+fn test_auth_get() {
+    let client = setup();
+
+    // Always use the current time
+    let now = chrono::Utc::now().timestamp();
+
+    // We really only care about the ikm and signature
+    // This information should be extracted from a local cache
+    let token =  ncryptf::Token::from(
+        "x2gMeJ5Np0CcKpZav+i9iiXeQBtaYMQ/yeEtcOgY3J".to_string(),
+        "LRSEe5zHb1aq20Hr9te2sQF8sLReSkO8bS1eD/9LDM8".to_string(),
+        base64::decode("f2mTaH9vkZZQyF7SxVeXDlOSDbVwjUzhdXv2T/YYO8k=").unwrap().to_vec(),
+        base64::decode("7v/CdiGoEI7bcj7R2EyDPH5nrCd2+7rHYNACB+Kf2FMx405und2KenGjNpCBPv0jOiptfHJHiY3lldAQTGCdqw==").unwrap().to_vec(),
+        now + 14400
+    ).unwrap();
+
+    let auth = match ncryptf::Authorization::from(
+        "GET".to_string(),
+        "/auth_only".to_string(),
+        token,
+        chrono::Utc::now(),
+        "".to_string(),
+        None,
+        Some(2),
+    ) {
+        Ok(auth) => auth,
+        Err(_) => {
+            assert!(false);
+            panic!("unable to generate auth header")
+        }
+    };
+
+    let response = client
+        .get("/auth_only")
+        .header(Header::new("Authorization", auth.get_header()))
+        .header(Header::new("Content-Type", "application/json"))
+        .header(Header::new("Accept", "application/json"))
+        .dispatch();
+
+
+    let json: serde_json::Value = serde_json::from_str(r#"{ "hello": "world"}"#).unwrap();
 
     // We should get an HTTP 200 back
     assert_eq!(response.status().code, 200);
