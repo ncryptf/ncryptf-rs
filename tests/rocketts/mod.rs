@@ -2,7 +2,6 @@ use ncryptf::{ek_route, randombytes_buf, rocket::ExportableEncryptionKeyData};
 use redis::Commands;
 use rocket::{http::Header, local::blocking::Client, serde::Serialize, fairing::AdHoc};
 use serde::Deserialize;
-use ncryptf::rocket::Fairing as NcryptfFairing;
 use rocket_db_pools::{deadpool_redis, Database};
 
 // This is a mock user used to simplify return data
@@ -49,8 +48,8 @@ pub struct RedisDb(deadpool_redis::Pool);
 
 /// A simple test struct
 #[derive(Deserialize, Serialize, Clone, Debug)]
-struct TestStruct<'r> {
-    pub hello: &'r str,
+struct TestStruct {
+    pub hello: String,
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -72,10 +71,9 @@ fn echo(data: ncryptf::rocket::Json<TestStruct>) -> ncryptf::rocket::Json<TestSt
 
 #[post("/auth_echo", data = "<data>")]
 fn auth_echo(
-    data: ncryptf::rocket::Json<TestStruct>,
-    _user: User, // Satisfying the reqest guard is sufficient to verify the request can be parsed
-) -> ncryptf::rocket::Json<TestStruct> {
-    return ncryptf::rocket::Json(data.0);
+    data: ncryptf::rocket::Identity<User> // Satisfying the reqest guard is sufficient to verify the request can be parsed
+) ->  ncryptf::rocket::Json<TestStruct> {
+    return  ncryptf::rocket::Json::<TestStruct>::from_str(data.data.clone().as_str()).unwrap();
 }
 
 /// Setup helper function
@@ -107,7 +105,6 @@ fn setup() -> Client {
     ek_route!(RedisDb);
 
     let rocket = rocket::custom(config)
-        .attach(NcryptfFairing)
         .attach(RedisDb::init())
         .mount("/", routes![echo, auth_echo, echo2])
         .mount("/ncryptf", routes![ncryptf_ek_route])
@@ -482,8 +479,6 @@ use ubyte::ToByteUnit;
 use std::sync::Arc;
 use rocket::http::Method;
 use rocket::{route, Route, Data, Response, Request};
-use rocket::tokio::io::ReadBuf;
-
 #[test]
 fn test_transform_series() {
     fn handler<'r>(_: &'r Request<'_>, data: Data<'r>) -> route::BoxFuture<'r> {

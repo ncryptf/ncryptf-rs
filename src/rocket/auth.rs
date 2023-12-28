@@ -42,6 +42,11 @@ pub trait AuthorizationTrait: Sync + Send + 'static {
     ) -> Result<Box<Self>, TokenError>;
 }
 
+pub struct Identity<T: AuthorizationTrait> {
+    pub user: T,
+    pub data: String
+}
+
 /// The ncryptf::auth!() macro provides the appropriate generic implementation details of FromRequest to allow User entities to be returned
 /// as a Rocket request guard (FromRequest). The core features of ncryptf authorization verification are implemented through this macro.
 /// If you wish to utilize ncryptf's authorization features you must perform the following.
@@ -74,11 +79,15 @@ macro_rules! auth {
         use $crate::rocket::TokenError;
         use $crate::rocket::AuthorizationTrait;
         use $crate::Authorization;
+        use rocket::data::FromData;
+        use $crate::rocket::Json;
+        
         #[$crate::rocket::async_trait]
-        impl<'r>$crate::rocket::request::FromRequest<'r> for $T {
+        impl<'r, T: $T> FromData<'r> for Identity<$T> {
             type Error = TokenError;
 
-            async fn from_request(req: &'r $crate::rocket::request::Request<'_>) ->$crate::rocket::Outcome<Self, TokenError> {
+            async fn from_data(req: &'r rocket::request::Request<'_>, data: rocket::Data<'r>) -> rocket::data::Outcome<'r, Self> {
+                $crate::rocket::Json::parse_body(req, data).await;
                 let dbs = req.rocket().figment().focus("databases");
 
                 let body = req.local_cache(|| return "".to_string());
@@ -89,7 +98,7 @@ macro_rules! auth {
                 // Retrieve the Authorization header
                 let header: String = match req.headers().get_one("Authorization") {
                     Some(h) => h.to_string(),
-                    None => return$crate::rocket::Outcome::Error(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
+                    None => return $crate::rocket::Outcome::Error(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
                 };
 
                 let params = match $crate::Authorization::extract_params_from_header_string(header) {
@@ -124,14 +133,17 @@ macro_rules! auth {
                             uri,
                             token.clone(),
                             date,
-                            data,
+                            data: data.clone(),
                             Some(params.salt),
                             params.version
                         ) {
                             Ok(auth) => {
                                 if auth.verify(params.hmac, $crate::rocket::NCRYPTF_DRIFT_ALLOWANCE) {
                                     match <$T>::get_user_from_token(token, dbs).await {
-                                        Ok(user) => return $crate::rocket::Outcome::Success(*user),
+                                        Ok(user) => return $crate::rocket::Outcome::Success(Identity {
+                                            user: *user,
+                                            data: data.clone()
+                                        }),
                                         Err(_) => return $crate::rocket::Outcome::Error(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
                                     };
                                 }

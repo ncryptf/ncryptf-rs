@@ -17,11 +17,8 @@ mod json;
 pub use json::{respond_to_with_ncryptf, Error as JsonError, Json, JsonResponse};
 mod ek;
 pub use ek::{EncryptionKey, ExportableEncryptionKeyData, *};
-mod fairing;
-pub use fairing::{Fairing, FairingConsumed, NcryptfRawBody, NcryptfRequestVersion};
-use rocket::Request;
 mod auth;
-pub use auth::{AuthorizationTrait, TokenError, *};
+pub use auth::{AuthorizationTrait, TokenError, Identity, *};
 
 use rocket_db_pools::deadpool_redis::redis;
 

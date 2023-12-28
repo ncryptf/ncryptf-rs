@@ -1,9 +1,7 @@
 use std::{error, fmt, io};
 
-use crate::rocket::NcryptfRawBody;
-
 use super::{
-    fairing::FairingConsumed, get_cache, EncryptionKey, RequestPublicKey, RequestSigningPublicKey,
+    get_cache, EncryptionKey, RequestPublicKey, RequestSigningPublicKey,
     NCRYPTF_CONTENT_TYPE,
 };
 use anyhow::anyhow;
@@ -262,38 +260,14 @@ impl<T> Json<T> {
 }
 
 impl<'r, T: Deserialize<'r>> Json<T> {
-    fn from_str(s: &'r str) -> Result<Self, Error<'r>> {
+    pub fn from_str(s: &'r str) -> Result<Self, Error<'r>> {
         return serde_json::from_str(s)
             .map(Json)
             .map_err(|e| Error::Parse(s, e));
     }
 
     async fn from_data(req: &'r Request<'_>, data: Data<'r>) -> Result<Self, Error<'r>> {
-        let is_consumed =false; //  req.local_cache(|| FairingConsumed(false));
-        match is_consumed {
-            // If the fairing is attached and we have already decrypted the string, we can simply return it as is without needing to decrypt it a second time
-            true => return Self::from_str(req.local_cache(|| return "".to_string())),
-            false => {
-                let limit = req.limits().get("json").unwrap_or(Limits::JSON);
-                let string = match data.open(limit).into_string().await {
-                    Ok(s) if s.is_complete() => s.into_inner(),
-                    Ok(_) => {
-                        let eof = io::ErrorKind::UnexpectedEof;
-                        return Err(Error::Io(io::Error::new(eof, "data limit exceeded")));
-                    }
-                    Err(error) => return Err(Error::Io(error)),
-                };
-
-                req.local_cache(|| NcryptfRawBody(string.clone()));
-
-                match Self::deserialize_req_from_string(req, string) {
-                    Ok(s) => {
-                        return Self::from_str(req.local_cache(|| return s));
-                    }
-                    Err(error) => return Err(error),
-                };
-            }
-        };
+        parse_body(req, data).await
     }
 }
 
@@ -306,12 +280,9 @@ impl<'r, T: Deserialize<'r>> FromData<'r> for Json<T> {
             Ok(value) => Outcome::Success(value),
             Err(Error::Io(e)) if e.kind() == io::ErrorKind::UnexpectedEof => {
                 Outcome::Error((Status::PayloadTooLarge, Error::Io(e)))
-                //Outcome::Failure((Status::PayloadTooLarge, Error::Io(e)))
             }
             Err(Error::Parse(s, e)) if e.classify() == serde_json::error::Category::Data => {
-                let sttr = req.local_cache(|| return "".to_string());
-                dbg!(sttr);
-                dbg!(e.to_string());
+                req.local_cache(|| return "".to_string());
                 Outcome::Error((Status::UnprocessableEntity, Error::Parse(s, e)))
             }
             Err(e) => Outcome::Error((Status::BadRequest, e)),
@@ -353,6 +324,25 @@ impl<'r, T: Serialize> Responder<'r, 'static> for JsonResponse<T> {
             Err(_) => return Err(Status::InternalServerError),
         };
     }
+}
+
+pub async fn parse_body<'r, T: Deserialize<'r>>(req: &'r Request<'_>, data: Data<'r>) -> Result<Json<T>, Error<'r>> {
+    let limit = req.limits().get("json").unwrap_or(Limits::JSON);
+        let string = match data.open(limit).into_string().await {
+            Ok(s) if s.is_complete() => s.into_inner(),
+            Ok(_) => {
+                let eof = io::ErrorKind::UnexpectedEof;
+                return Err(Error::Io(io::Error::new(eof, "data limit exceeded")));
+            }
+            Err(error) => return Err(Error::Io(error)),
+        };
+
+        match Json::<T>::deserialize_req_from_string(req, string) {
+            Ok(s) => {
+                return Json::<T>::from_str(req.local_cache(|| return s));
+            }
+            Err(error) => return Err(error),
+        };
 }
 
 pub fn respond_to_with_ncryptf<'r, 'a, T: serde::Serialize>(
