@@ -24,7 +24,6 @@ ncryptf-rs = { git = "github.com/ncryptf/ncryptf-rs" }
 
 Ncryptf supports 2 optional features:
 - `rocket` for rocket.rs bindings
-- `sea-orm` for SeaORM rocket.rs bindings
 - `client` which provides a `reqwest` client you can use to interact with ncryptf.
 
 ### Exports
@@ -53,14 +52,6 @@ common
 In your `mod.rs` or `lib.rs` have the following:
 ```rust
 pub mod ncryptflib
-pub use ncryptf::{
-    rocket_db_pools,
-    rocket_dyn_templates,
-    rocketfw as rocket,
-    sea_orm,
-    sea_orm_migration,
-    sea_orm_rocket,
-};
 ```
 
 Then in your ncryptflib.rs have the following:
