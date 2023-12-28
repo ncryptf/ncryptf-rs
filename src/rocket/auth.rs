@@ -42,10 +42,14 @@ pub trait AuthorizationTrait: Sync + Send + 'static {
     ) -> Result<Box<Self>, TokenError>;
 }
 
-pub struct Identity<T: AuthorizationTrait> {
+#[derive(Debug, Clone)]
+pub struct Identity<T, D> {
     pub user: T,
-    pub data: String
+    pub data: D
 }
+
+use rocket::data::FromData;
+use serde::Deserialize;
 
 /// The ncryptf::auth!() macro provides the appropriate generic implementation details of FromRequest to allow User entities to be returned
 /// as a Rocket request guard (FromRequest). The core features of ncryptf authorization verification are implemented through this macro.
@@ -73,89 +77,84 @@ pub struct Identity<T: AuthorizationTrait> {
 ///  and other requests that don't have a body. The FromRequest functionality is only available for these content types.
 ///  Additionally, ncryptf::rocket::Json will handle all JSON + Ncryptf+JSON content types when this is in use. ncryptf::rocket::Json is mostly compatible with rocket::serde::Json, but shares the same limitations, features,
 ///  and particularities.
-#[macro_export]
-macro_rules! auth {
-    ($T: ty) => {
-        use $crate::rocket::TokenError;
-        use $crate::rocket::AuthorizationTrait;
-        use $crate::Authorization;
-        use rocket::data::FromData;
-        use $crate::rocket::Json;
-        
-        #[$crate::rocket::async_trait]
-        impl<'r, T: $T> FromData<'r> for Identity<$T> {
-            type Error = TokenError;
+#[rocket::async_trait]
+impl<'r, T: AuthorizationTrait, D: Deserialize<'r>> FromData<'r> for crate::rocket::Identity<T, D> {
+    type Error = crate::rocket::TokenError;
 
-            async fn from_data(req: &'r rocket::request::Request<'_>, data: rocket::Data<'r>) -> rocket::data::Outcome<'r, Self> {
-                $crate::rocket::Json::parse_body(req, data).await;
-                let dbs = req.rocket().figment().focus("databases");
+    async fn from_data(
+        req: &'r rocket::request::Request<'_>,
+        data: rocket::Data<'r>
+    ) -> rocket::data::Outcome<'r, Self> {
+        crate::rocket::json::parse_body::<D>(req, data).await;
+        let dbs = req.rocket().figment().focus("databases");
 
-                let body = req.local_cache(|| return "".to_string());
+        let body = req.local_cache(|| return "".to_string());
 
-                // This requires the request body to parse, and is triggered before from_data()
-                println!("Request Body: {:?}", body);
+        // This requires the request body to parse, and is triggered before from_data()
+        println!("Request Body: {:?}", body);
 
-                // Retrieve the Authorization header
-                let header: String = match req.headers().get_one("Authorization") {
-                    Some(h) => h.to_string(),
-                    None => return $crate::rocket::Outcome::Error(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
-                };
+        // Retrieve the Authorization header
+        let header: String = match req.headers().get_one("Authorization") {
+            Some(h) => h.to_string(),
+            None => return rocket::data::Outcome::Error((crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
+        };
 
-                let params = match $crate::Authorization::extract_params_from_header_string(header) {
-                    Ok(params) => params,
-                    Err(_) => return $crate::rocket::Outcome::Error(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
-                };
+        let params = match crate::Authorization::extract_params_from_header_string(header) {
+            Ok(params) => params,
+            Err(_) => return rocket::data::Outcome::Error((crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
+        };
 
-                match <$T>::get_token_from_access_token(params.access_token, dbs.clone()).await {
-                    Ok(token) => {
-                        // Create a new datetime from the data parameter, or the request header
-                        let date: $crate::rocket::DateTime<$crate::rocket::Utc> = match params.date {
-                            Some(date) => date,
+        match <T>::get_token_from_access_token(params.access_token, dbs.clone()).await {
+            Ok(token) => {
+                // Create a new datetime from the data parameter, or the request header
+                let date: crate::rocket::DateTime<crate::rocket::Utc> = match params.date {
+                    Some(date) => date,
+                    None => {
+                        let date: crate::rocket::DateTime<crate::rocket::Utc> = match req.headers().get_one("X-Date") {
+                            Some(h) => {
+                                let date = crate::rocket::DateTime::parse_from_rfc2822(&h.to_string());
+                                date.unwrap().with_timezone(&crate::rocket::Utc)
+                            },
                             None => {
-                                let date: $crate::rocket::DateTime<$crate::rocket::Utc> = match req.headers().get_one("X-Date") {
-                                    Some(h) => {
-                                        let date = $crate::rocket::DateTime::parse_from_rfc2822(&h.to_string());
-                                        date.unwrap().with_timezone(&$crate::rocket::Utc)
-                                    },
-                                    None => {
-                                        return $crate::rocket::request::Outcome::Error(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken));
-                                    }
-                                };
-                                date
+                                return rocket::data::Outcome::Error((crate::rocket::Status::Unauthorized, TokenError::InvalidToken));
                             }
                         };
-
-                        let method = req.method().to_string();
-                        let uri = req.uri().to_string();
-                        let data = body.to_owned();
-                        match $crate::Authorization::from(
-                            method,
-                            uri,
-                            token.clone(),
-                            date,
-                            data: data.clone(),
-                            Some(params.salt),
-                            params.version
-                        ) {
-                            Ok(auth) => {
-                                if auth.verify(params.hmac, $crate::rocket::NCRYPTF_DRIFT_ALLOWANCE) {
-                                    match <$T>::get_user_from_token(token, dbs).await {
-                                        Ok(user) => return $crate::rocket::Outcome::Success(Identity {
-                                            user: *user,
-                                            data: data.clone()
-                                        }),
-                                        Err(_) => return $crate::rocket::Outcome::Error(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
-                                    };
-                                }
-                            },
-                            Err(_) => return $crate::rocket::Outcome::Error(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
-                        };
-                    },
-                    Err(_) => return $crate::rocket::Outcome::Error(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
+                        date
+                    }
                 };
 
-                return $crate::rocket::Outcome::Error(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
-            }
-        }
+                let method = req.method().to_string();
+                let uri = req.uri().to_string();
+                let data = body.clone();
+                match crate::Authorization::from(
+                    method,
+                    uri,
+                    token.clone(),
+                    date,
+                    data.clone().to_owned(),
+                    Some(params.salt),
+                    params.version
+                ) {
+                    Ok(auth) => {
+                        if auth.verify(params.hmac, crate::rocket::NCRYPTF_DRIFT_ALLOWANCE) {
+                            match <T>::get_user_from_token(token, dbs).await {
+                                Ok(user) => {
+                                    let dc = data.clone().to_owned();
+                                    return rocket::data::Outcome::Success(crate::rocket::Identity {
+                                        user: *user,
+                                        data: crate::rocket::Json::<D>::from_str(dc.as_str()).unwrap().into_inner()
+                                    })
+                                },
+                                Err(_) => return rocket::data::Outcome::Error((crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
+                            };
+                        }
+                    },
+                    Err(_) => return rocket::data::Outcome::Error((crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
+                };
+            },
+            Err(_) => return rocket::data::Outcome::Error((crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
+        };
+
+        return rocket::data::Outcome::Error((crate::rocket::Status::Unauthorized, TokenError::InvalidToken))
     }
 }

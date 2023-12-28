@@ -16,7 +16,7 @@ pub struct RequestSigningPublicKey(pub Vec<u8>);
 mod json;
 pub use json::{respond_to_with_ncryptf, Error as JsonError, Json, JsonResponse};
 mod ek;
-pub use ek::{EncryptionKey, ExportableEncryptionKeyData, *};
+pub use ek::{EncryptionKey, ExportableEncryptionKeyData};
 mod auth;
 pub use auth::{AuthorizationTrait, TokenError, Identity, *};
 

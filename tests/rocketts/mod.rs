@@ -40,8 +40,6 @@ impl ncryptf::rocket::AuthorizationTrait for User {
     }
 }
 
-ncryptf::auth!(User);
-
 #[derive(Database)]
 #[database("cache")]
 pub struct RedisDb(deadpool_redis::Pool);
@@ -71,9 +69,9 @@ fn echo(data: ncryptf::rocket::Json<TestStruct>) -> ncryptf::rocket::Json<TestSt
 
 #[post("/auth_echo", data = "<data>")]
 fn auth_echo(
-    data: ncryptf::rocket::Identity<User> // Satisfying the reqest guard is sufficient to verify the request can be parsed
+    data: ncryptf::rocket::Identity<User, TestStruct> // Satisfying the reqest guard is sufficient to verify the request can be parsed
 ) ->  ncryptf::rocket::Json<TestStruct> {
-    return  ncryptf::rocket::Json::<TestStruct>::from_str(data.data.clone().as_str()).unwrap();
+    return data.data;
 }
 
 /// Setup helper function

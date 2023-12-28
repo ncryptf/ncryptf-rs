@@ -266,7 +266,7 @@ impl<'r, T: Deserialize<'r>> Json<T> {
             .map_err(|e| Error::Parse(s, e));
     }
 
-    async fn from_data(req: &'r Request<'_>, data: Data<'r>) -> Result<Self, Error<'r>> {
+    pub async fn from_data(req: &'r Request<'_>, data: Data<'r>) -> Result<Self, Error<'r>> {
         parse_body(req, data).await
     }
 }
@@ -326,7 +326,7 @@ impl<'r, T: Serialize> Responder<'r, 'static> for JsonResponse<T> {
     }
 }
 
-pub async fn parse_body<'r, T: Deserialize<'r>>(req: &'r Request<'_>, data: Data<'r>) -> Result<Json<T>, Error<'r>> {
+pub(crate) async fn parse_body<'r, T: Deserialize<'r>>(req: &'r Request<'_>, data: Data<'r>) -> Result<Json<T>, Error<'r>> {
     let limit = req.limits().get("json").unwrap_or(Limits::JSON);
         let string = match data.open(limit).into_string().await {
             Ok(s) if s.is_complete() => s.into_inner(),
