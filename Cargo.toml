@@ -5,7 +5,7 @@ description = "Secure API authentication and end to end encryption."
 repository = "https://github.com/ncryptf/ncryptf-rs"
 license = "BSD-3-Clause"
 categories = ["cryptography", "authentication", "api-bindings"]
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 
 [registries.crates-io]
