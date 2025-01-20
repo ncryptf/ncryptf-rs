@@ -104,7 +104,7 @@ impl Authorization {
 
     /// Returns the date as a string
     pub fn get_date_string(&self) -> String {
-        return self.date.to_rfc2822();
+        return self.date.format("%a, %d %b %Y %H:%M:%S %z").to_string();
     }
 
     /// Returns the raw HMAC

@@ -28,7 +28,7 @@ impl Signature {
 
         let hash = Self::get_signature_hash(payload, salt.clone(), v);
         let b64s = base64::encode(salt);
-        let ts = datetime.to_rfc2822();
+        let ts = datetime.format("%a, %d %b %Y %H:%M:%S %z").to_string();
 
         return format!("{}\n{}+{}\n{}\n{}", hash, method, uri, ts, b64s);
     }
