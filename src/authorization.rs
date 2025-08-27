@@ -7,6 +7,7 @@ use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
+use base64::{Engine as _, engine::general_purpose};
 
 /// HMAC Auth Info header
 const AUTH_INFO: &str = "HMAC|AuthenticationKey";
@@ -115,13 +116,13 @@ impl Authorization {
     /// Returns the base64 encoded HMAC
     pub fn get_encoded_hmac(&self) -> String {
         let hmac = self.get_hmac();
-        return base64::encode(hmac);
+        return general_purpose::STANDARD.encode(hmac);
     }
 
     /// Returns the base64 encoded salt
     pub fn get_encoded_salt(&self) -> String {
         let salt = self.salt.clone();
-        return base64::encode(salt);
+        return general_purpose::STANDARD.encode(salt);
     }
 
     /// Returns the signature string
@@ -170,7 +171,7 @@ impl Authorization {
                     .unwrap()
                     .to_string()
                     .replace("/", "\\/");
-                return format!("HMAC {}", base64::encode(json));
+                return format!("HMAC {}", general_purpose::STANDARD.encode(json));
             }
             _ => {
                 return format!("HMAC {},{},{}", self.token.access_token, hmac, salt);
@@ -192,13 +193,13 @@ impl Authorization {
 
                 return Ok(AuthParams {
                     access_token: params[0].clone(),
-                    hmac: base64::decode(params[1].clone()).unwrap(),
-                    salt: base64::decode(params[2].clone()).unwrap(),
+                    hmac: general_purpose::STANDARD.decode(params[1].clone()).unwrap(),
+                    salt: general_purpose::STANDARD.decode(params[2].clone()).unwrap(),
                     version: Some(1),
                     date: None,
                 });
             } else {
-                let json = base64::decode(auth_header).unwrap();
+                let json = general_purpose::STANDARD.decode(auth_header).unwrap();
                 match serde_json::from_str::<AuthParamsJson>(
                     String::from_utf8(json).unwrap().as_str(),
                 ) {
@@ -208,8 +209,8 @@ impl Authorization {
                             let d = date.unwrap().with_timezone(&Utc);
                             return Ok(AuthParams {
                                 access_token: params.access_token,
-                                hmac: base64::decode(params.hmac).unwrap(),
-                                salt: base64::decode(params.salt).unwrap(),
+                                hmac: general_purpose::STANDARD.decode(params.hmac).unwrap(),
+                                salt: general_purpose::STANDARD.decode(params.salt).unwrap(),
                                 version: Some(2),
                                 date: Some(d),
                             });

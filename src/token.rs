@@ -1,7 +1,10 @@
 use chrono::Utc;
-use libsodium_sys::{
-    crypto_sign_PUBLICKEYBYTES as CRYPTO_SIGN_PUBLICKEYBYTES, crypto_sign_ed25519_sk_to_pk,
+use dryoc::constants::{
+    CRYPTO_SIGN_PUBLICKEYBYTES,
+    CRYPTO_SIGN_SECRETKEYBYTES
 };
+use dryoc::sign::SigningKeyPair;
+use base64::{Engine as _, engine::general_purpose};
 
 use crate::error::NcryptfError as Error;
 use serde::{Deserialize, Serialize};
@@ -28,11 +31,8 @@ impl Token {
         }
 
         return Self {
-            access_token: base64::encode_config(crate::util::randombytes_buf(48), base64::URL_SAFE),
-            refresh_token: base64::encode_config(
-                crate::util::randombytes_buf(64),
-                base64::URL_SAFE,
-            ),
+            access_token: general_purpose::URL_SAFE.encode(crate::util::randombytes_buf(48)),
+            refresh_token: general_purpose::URL_SAFE.encode(crate::util::randombytes_buf(64)),
             ikm: crate::util::randombytes_buf(32),
             signature: crate::util::randombytes_buf(64),
             expires_at: expires_at,
@@ -86,8 +86,8 @@ impl Token {
         return match Token::from(
             json.get("access_token").unwrap().to_string(),
             json.get("refresh_token").unwrap().to_string(),
-            base64::decode(json.get("ikm").unwrap().as_str().unwrap()).unwrap(),
-            base64::decode(json.get("signing").unwrap().as_str().unwrap()).unwrap(),
+            general_purpose::STANDARD.decode(json.get("ikm").unwrap().as_str().unwrap()).unwrap(),
+            general_purpose::STANDARD.decode(json.get("signing").unwrap().as_str().unwrap()).unwrap(),
             json.get("expires_at").unwrap().as_i64().unwrap(),
         ) {
             Ok(token) => return Ok(token),
@@ -104,18 +104,19 @@ impl Token {
 
     /// Returns the public key for the signature
     pub fn get_signature_public_key(&self) -> Result<Vec<u8>, Error> {
-        let mut public: [u8; (CRYPTO_SIGN_PUBLICKEYBYTES as usize) as usize] =
-            [0u8; (CRYPTO_SIGN_PUBLICKEYBYTES as usize)];
-        let sk = self.signature.clone().as_ptr();
-
-        let result = unsafe { crypto_sign_ed25519_sk_to_pk(public.as_mut_ptr(), sk) };
-        if result == 0 {
-            return Ok(public.as_ref().to_owned());
+        if self.signature.len() != CRYPTO_SIGN_SECRETKEYBYTES {
+            return Err(Error::TokenSignatureSize(format!(
+                "Signature secret key should be {} bytes",
+                CRYPTO_SIGN_SECRETKEYBYTES
+            )));
         }
 
-        return Err(Error::TokenSignatureSize(format!(
-            "Signature secret key should be {} bytes",
-            64
-        )));
+        // Convert Vec<u8> to fixed-size array
+        let mut secret_key_bytes = [0u8; CRYPTO_SIGN_SECRETKEYBYTES];
+        secret_key_bytes.copy_from_slice(&self.signature);
+
+        let keypair: SigningKeyPair<[u8; CRYPTO_SIGN_PUBLICKEYBYTES], [u8; CRYPTO_SIGN_SECRETKEYBYTES]> = SigningKeyPair::from_secret_key(secret_key_bytes);
+
+        return Ok(keypair.public_key.to_vec());
     }
 }

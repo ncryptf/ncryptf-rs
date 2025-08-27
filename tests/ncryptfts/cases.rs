@@ -1,4 +1,5 @@
-use base64;
+use base64::{Engine as _, engine::general_purpose};
+
 use chrono::{TimeZone, Utc};
 use ncryptf::Token;
 #[derive(Debug, Clone)]
@@ -14,7 +15,7 @@ pub fn get_date() -> chrono::DateTime<chrono::offset::Utc> {
 }
 
 pub fn get_salt() -> Vec<u8> {
-    return base64::decode("efEY/IJdAbi474TtQCCjj2y1FGB4BFFPpbHm/1QtpyI=")
+    return general_purpose::STANDARD.decode("efEY/IJdAbi474TtQCCjj2y1FGB4BFFPpbHm/1QtpyI=")
         .ok()
         .unwrap();
 }
@@ -108,23 +109,23 @@ pub fn get_token() -> Token {
     return Token::from(
         "x2gMeJ5Np0CcKpZav+i9iiXeQBtaYMQ/yeEtcOgY3J".to_string(),
         "LRSEe5zHb1aq20Hr9te2sQF8sLReSkO8bS1eD/9LDM8".to_string(),
-        base64::decode("f2mTaH9vkZZQyF7SxVeXDlOSDbVwjUzhdXv2T/YYO8k=").unwrap().to_vec(),
-        base64::decode("7v/CdiGoEI7bcj7R2EyDPH5nrCd2+7rHYNACB+Kf2FMx405und2KenGjNpCBPv0jOiptfHJHiY3lldAQTGCdqw==").unwrap().to_vec(),
+        general_purpose::STANDARD.decode("f2mTaH9vkZZQyF7SxVeXDlOSDbVwjUzhdXv2T/YYO8k=").unwrap().to_vec(),
+        general_purpose::STANDARD.decode("7v/CdiGoEI7bcj7R2EyDPH5nrCd2+7rHYNACB+Kf2FMx405und2KenGjNpCBPv0jOiptfHJHiY3lldAQTGCdqw==").unwrap().to_vec(),
         now + 14400
     ).unwrap();
 }
 
 pub fn get_expected_cipher() -> Vec<u8> {
-    return base64::decode("1odrjBif71zRcZidfhEzSb80rXGJGB1J3upTb+TwhpxmFjXOXjwSDw45e7p/+FW4Y0/FDuLjHfGghOG0UC7j4xmX8qIVYUdbKCB/dLn34HQ0D0NIM6N9Qj83bpS5XgK1o+luonc0WxqA3tdXTcgkd2D+cSSSotJ/s+5fqN3w5xsKc7rKb1p3MpvRzyEmdNgJCFOk8EErn0bolz9LKyPEO0A2Mnkzr19bDwsgD1DGEYlo0i9KOw06RpaZRz2J+OJ+EveIlQGDdLT8Gh+nv65TOKJqCswOly0=").unwrap();
+    return general_purpose::STANDARD.decode("1odrjBif71zRcZidfhEzSb80rXGJGB1J3upTb+TwhpxmFjXOXjwSDw45e7p/+FW4Y0/FDuLjHfGghOG0UC7j4xmX8qIVYUdbKCB/dLn34HQ0D0NIM6N9Qj83bpS5XgK1o+luonc0WxqA3tdXTcgkd2D+cSSSotJ/s+5fqN3w5xsKc7rKb1p3MpvRzyEmdNgJCFOk8EErn0bolz9LKyPEO0A2Mnkzr19bDwsgD1DGEYlo0i9KOw06RpaZRz2J+OJ+EveIlQGDdLT8Gh+nv65TOKJqCswOly0=").unwrap();
 }
 /*
 pub fn get_expected_signature() -> Vec<u8> {
-    return base64::decode("dcvJclMxEx7pcW/jeVm0mFHGxVksY6h0/vNkZTfVf+wftofnP+yDFdrNs5TtZ+FQ0KEOm6mm9XUMXavLaU9yDg==").unwrap();
+    return general_purpose::STANDARD.decode("dcvJclMxEx7pcW/jeVm0mFHGxVksY6h0/vNkZTfVf+wftofnP+yDFdrNs5TtZ+FQ0KEOm6mm9XUMXavLaU9yDg==").unwrap();
 }
 */
 
 pub fn get_expected_v2_cipher() -> Vec<u8> {
-    return base64::decode("3iWQAm7pUZyrfwb8J8IgjAS73UTOfsjRT9/FLTo569CkMuhiesfnkGvsDcHR3o2aPL2OVTcmWOTX8AY11odrjBif71zRcZidfhEzSb80rXGJGB1J3upTb+TwhpxmFjXOXjwSDw45e7p/+FW4Y0/FDuLjHfGghOG0UC7j4xmX8qIVYUdbKCB/dLn34HQ0D0NIM6N9Qj83bpS5XgK1o+luonc0WxqA3tdXTcgkd2D+cSSSotJ/s+5fqN3w5xsKc7rKb1p3MpvRzyEmdNgJCFOk8EErn0bolz9LKyPEO0A2Mnkzr19bDwsgD1DGEYlo0i9KOw06RpaZRz2J+OJ+EveIlQGDdLT8Gh+nv65TOKJqCswOly0i42NKK/654zGtxTSOcNHPEwtFAz0A4k0hwlIFopZEsXXLyXJTMRMe6XFv43lZtJhRxsVZLGOodP7zZGU31X/sH7aH5z/sgxXazbOU7WfhUNChDpuppvV1DF2ry2lPcg4SwqYwa53inoY2+eCPP4Hkp/PKhSOEMFlWV+dlQirn6GGf5RQSsQ7ti/QCvi/BRIhb3ZHiPptZJZIbYwqIpvYu").unwrap();
+    return general_purpose::STANDARD.decode("3iWQAm7pUZyrfwb8J8IgjAS73UTOfsjRT9/FLTo569CkMuhiesfnkGvsDcHR3o2aPL2OVTcmWOTX8AY11odrjBif71zRcZidfhEzSb80rXGJGB1J3upTb+TwhpxmFjXOXjwSDw45e7p/+FW4Y0/FDuLjHfGghOG0UC7j4xmX8qIVYUdbKCB/dLn34HQ0D0NIM6N9Qj83bpS5XgK1o+luonc0WxqA3tdXTcgkd2D+cSSSotJ/s+5fqN3w5xsKc7rKb1p3MpvRzyEmdNgJCFOk8EErn0bolz9LKyPEO0A2Mnkzr19bDwsgD1DGEYlo0i9KOw06RpaZRz2J+OJ+EveIlQGDdLT8Gh+nv65TOKJqCswOly0i42NKK/654zGtxTSOcNHPEwtFAz0A4k0hwlIFopZEsXXLyXJTMRMe6XFv43lZtJhRxsVZLGOodP7zZGU31X/sH7aH5z/sgxXazbOU7WfhUNChDpuppvV1DF2ry2lPcg4SwqYwa53inoY2+eCPP4Hkp/PKhSOEMFlWV+dlQirn6GGf5RQSsQ7ti/QCvi/BRIhb3ZHiPptZJZIbYwqIpvYu").unwrap();
 }
 
 pub fn get_payload() -> String {
@@ -146,7 +147,7 @@ pub fn get_payload() -> String {
         }
     }
     */
-    let raw =  base64::decode("ewogICAgImZvbyI6ICJiYXIiLAogICAgInRlc3QiOiB7CiAgICAgICAgInRydWUiOiBmYWxzZSwKICAgICAgICAiemVybyI6IDAuMCwKICAgICAgICAiYSI6IDEsCiAgICAgICAgImIiOiAzLjE0LAogICAgICAgICJuaWwiOiBudWxsLAogICAgICAgICJhcnIiOiBbCiAgICAgICAgICAgICJhIiwgImIiLCAiYyIsICJkIgogICAgICAgIF0KICAgIH0KfQ==").unwrap();
+    let raw =  general_purpose::STANDARD.decode("ewogICAgImZvbyI6ICJiYXIiLAogICAgInRlc3QiOiB7CiAgICAgICAgInRydWUiOiBmYWxzZSwKICAgICAgICAiemVybyI6IDAuMCwKICAgICAgICAiYSI6IDEsCiAgICAgICAgImIiOiAzLjE0LAogICAgICAgICJuaWwiOiBudWxsLAogICAgICAgICJhcnIiOiBbCiAgICAgICAgICAgICJhIiwgImIiLCAiYyIsICJkIgogICAgICAgIF0KICAgIH0KfQ==").unwrap();
     return std::str::from_utf8(&raw).unwrap().to_string();
 }
 
@@ -163,13 +164,13 @@ pub struct CData {
 impl CData {
     pub fn init() -> Self {
         return Self {
-            client_kp_secret: base64::decode("bvV/vnfB43spmprI8aBK/Fd8xxSBlx7EhuxfxxTVI2o=").unwrap(),
-            client_kp_public: base64::decode("Ojnr0KQy6GJ6x+eQa+wNwdHejZo8vY5VNyZY5NfwBjU=").unwrap(),
-            server_kp_secret: base64::decode("gH1+ileX1W5fMeOWue8HxdREnK04u72ybxCQgivWoZ4=").unwrap(),
-            server_kp_public: base64::decode("YU74X2OqHujLVDH9wgEHscD5eyiLPvcugRUZG6R3BB8=").unwrap(),
-            signature_kp_secret: base64::decode("9wdUWlSW2ZQB6ImeUZ5rVqcW+mgQncN1Cr5D2YvFdvEi42NKK/654zGtxTSOcNHPEwtFAz0A4k0hwlIFopZEsQ==").unwrap(),
-            signature_kp_public: base64::decode("IuNjSiv+ueMxrcU0jnDRzxMLRQM9AOJNIcJSBaKWRLE=").unwrap(),
-            nonce: base64::decode("bulRnKt/BvwnwiCMBLvdRM5+yNFP38Ut").unwrap()
+            client_kp_secret: general_purpose::STANDARD.decode("bvV/vnfB43spmprI8aBK/Fd8xxSBlx7EhuxfxxTVI2o=").unwrap(),
+            client_kp_public: general_purpose::STANDARD.decode("Ojnr0KQy6GJ6x+eQa+wNwdHejZo8vY5VNyZY5NfwBjU=").unwrap(),
+            server_kp_secret: general_purpose::STANDARD.decode("gH1+ileX1W5fMeOWue8HxdREnK04u72ybxCQgivWoZ4=").unwrap(),
+            server_kp_public: general_purpose::STANDARD.decode("YU74X2OqHujLVDH9wgEHscD5eyiLPvcugRUZG6R3BB8=").unwrap(),
+            signature_kp_secret: general_purpose::STANDARD.decode("9wdUWlSW2ZQB6ImeUZ5rVqcW+mgQncN1Cr5D2YvFdvEi42NKK/654zGtxTSOcNHPEwtFAz0A4k0hwlIFopZEsQ==").unwrap(),
+            signature_kp_public: general_purpose::STANDARD.decode("IuNjSiv+ueMxrcU0jnDRzxMLRQM9AOJNIcJSBaKWRLE=").unwrap(),
+            nonce: general_purpose::STANDARD.decode("bulRnKt/BvwnwiCMBLvdRM5+yNFP38Ut").unwrap()
         };
     }
 }

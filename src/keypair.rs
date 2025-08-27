@@ -1,10 +1,7 @@
 use crate::error::NcryptfError as Error;
 use serde::{Deserialize, Serialize};
 
-use libsodium_sys::{
-    crypto_box_PUBLICKEYBYTES as CRYPTO_BOX_PUBLICKEYBYTES,
-    crypto_box_SECRETKEYBYTES as CRYPTO_BOX_SECRETKEYBYTES, crypto_box_keypair,
-};
+use dryoc::{constants::{CRYPTO_BOX_PUBLICKEYBYTES, CRYPTO_BOX_SECRETKEYBYTES}, dryocbox};
 
 /// Represents a generic keypair
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,7 +22,9 @@ impl Keypair {
                 .try_into()
                 .unwrap();
 
-        let _result = unsafe { crypto_box_keypair(pk.as_mut_ptr(), sk.as_mut_ptr()) };
+        let result = dryocbox::KeyPair::new();
+        sk.copy_from_slice(&result.secret_key.as_ref());
+        pk.copy_from_slice(&result.public_key.as_ref());
         return Keypair {
             secret_key: sk.to_vec(),
             public_key: pk.to_vec(),

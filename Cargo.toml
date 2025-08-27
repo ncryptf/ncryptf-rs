@@ -5,26 +5,23 @@ description = "Secure API authentication and end to end encryption."
 repository = "https://github.com/ncryptf/ncryptf-rs"
 license = "BSD-3-Clause"
 categories = ["cryptography", "authentication", "api-bindings"]
-version = "0.3.3"
+version = "0.4.0"
 edition = "2021"
 
-[registries.crates-io]
-protocol = "sparse"
-
 [dependencies]
-libsodium-sys-stable = { version = "^1.20" }
+dryoc = { version = "0.7", default-features = false, features = ["base64", "serde"] }
 thiserror = { version = "^2.0" }
 chrono = { version = "^0.4" } 
-base64 = { version = "^0.13" }
+base64 = { version = "^0.22" }
 sha256 = { version = "1.0.3" }
 hkdf = { version = "0.12.3" }
 sha2 = { version = "^0.10"  }
 hmac = { version = "^0.12" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
-constant_time_eq = { version = "^0.3" }
+constant_time_eq = { version = "^0.4" }
 hex = { version =  "^0.4" }
-rand = { version = "^0.8" }
+rand = { version = "^0.9" }
 rocket = { version = "^0.5", features = ["tls", "secrets", "json"], optional = true  }
 rocket_db_pools = { version = "^0.2",  features = ["deadpool_redis"], optional = true }
 rocket_dyn_templates = { version = "^0.2",  features = ["handlebars"], optional = true }
@@ -45,7 +42,7 @@ client = ["dep:reqwest", "dep:async-recursion"]
 
 [dev-dependencies]
 reqwest = { version = "^0.12", default-features = false,  features = ["json", "blocking"] }
-redis = { version = "^0.28" }
+redis = { version = "^0.32" }
 
 [badges]
 github = { repository = "https://github.com/ncryptf/ncryptf-rs" }

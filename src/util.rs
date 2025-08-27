@@ -1,6 +1,6 @@
-/// Returns len random bytes a Vec<u8> using libsodium
+/// Returns len random bytes a Vec<u8> using dryoc
 pub fn randombytes_buf(len: usize) -> Vec<u8> {
-    let mut bytes = vec![0; len];
-    unsafe { libsodium_sys::randombytes_buf(bytes.as_mut_ptr().cast(), len) };
-    return bytes.to_owned();
+    let mut bytes = vec![0u8; len];
+    dryoc::rng::copy_randombytes(&mut bytes);
+    bytes
 }

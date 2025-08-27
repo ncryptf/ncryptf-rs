@@ -1,8 +1,4 @@
-use libsodium_sys::{
-    crypto_box_PUBLICKEYBYTES as CRYPTO_BOX_PUBLICKEYBYTES,
-    crypto_box_SECRETKEYBYTES as CRYPTO_BOX_SECRETKEYBYTES,
-};
-
+use dryoc::constants::{CRYPTO_BOX_PUBLICKEYBYTES, CRYPTO_BOX_SECRETKEYBYTES};
 use ncryptf::*;
 
 #[test]

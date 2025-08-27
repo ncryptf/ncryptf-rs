@@ -1,5 +1,6 @@
 use std::{error, fmt, io};
 
+use base64::{engine::general_purpose, Engine as _};
 use super::{
     get_cache, EncryptionKey, RequestPublicKey, RequestSigningPublicKey,
     NCRYPTF_CONTENT_TYPE,
@@ -121,7 +122,7 @@ impl<T> Json<T> {
                             };
 
                         // Convert the base64 payload into Vec<u8>
-                        let data = base64::decode(string).unwrap();
+                        let data = general_purpose::STANDARD.decode(string).unwrap();
 
                         // Retrieve the HashID header
                         let hash_id = match req.headers().get_one("X-HashId") {
@@ -369,7 +370,7 @@ pub fn respond_to_with_ncryptf<'r, 'a, T: serde::Serialize>(
                     // If the cache data is empty, check the header as a fallback
                     if cpk.0.is_empty() {
                         pk = match req.headers().get_one("X-PubKey") {
-                            Some(h) => base64::decode(h).unwrap(),
+                            Some(h) => general_purpose::STANDARD.decode(h).unwrap(),
                             // If the header isn't sent, then we have no way to encrypt a response the client can use
                             None =>return Err(anyhow!("Public key is not available on request. Unable to re-encrypt message to client."))
                         };
@@ -407,7 +408,7 @@ pub fn respond_to_with_ncryptf<'r, 'a, T: serde::Serialize>(
                         Err(_error) => return Err(anyhow!("Unable to encrypt message")),
                     };
 
-                    let d = base64::encode(content);
+                    let d = general_purpose::STANDARD.encode(content);
 
                     let respond_to = match d.respond_to(req) {
                         Ok(s) => s,
@@ -418,11 +419,11 @@ pub fn respond_to_with_ncryptf<'r, 'a, T: serde::Serialize>(
                         .header(ContentType::new("application", "vnd.ncryptf+json"))
                         .header(Header::new(
                             "x-public-key",
-                            base64::encode(ek.get_box_kp().get_public_key()),
+                            general_purpose::STANDARD.encode(ek.get_box_kp().get_public_key()),
                         ))
                         .header(Header::new(
                             "x-signature-public-key",
-                            base64::encode(ek.get_sign_kp().get_public_key()),
+                            general_purpose::STANDARD.encode(ek.get_sign_kp().get_public_key()),
                         ))
                         .header(Header::new(
                             "x-public-key-expiration",

@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose, Engine as _};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -51,7 +52,7 @@ impl Response {
                                 r.body = None;
                                 return Ok(r);
                             }
-                            let body_bytes = base64::decode(body).unwrap();
+                            let body_bytes = general_purpose::STANDARD.decode(body).unwrap();
                             let ncryptf_response = crate::Response::from(sk.clone()).unwrap();
                             match ncryptf_response.decrypt(body_bytes.clone(), None, None) {
                                 Ok(message) => {

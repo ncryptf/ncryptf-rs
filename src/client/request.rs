@@ -1,5 +1,6 @@
 use std::fmt;
 
+use base64::{engine::general_purpose, Engine as _};
 use chrono::Utc;
 use reqwest::{
     header::{HeaderMap, HeaderValue},
@@ -162,7 +163,7 @@ impl<UT: UpdateTokenTrait, RT: RequestTrait> Request<UT, RT> {
                     HeaderValue::from_str(&"application/vnd.ncryptf+json").unwrap(),
                 );
                 headers.insert("X-HashId", HeaderValue::from_str(&hashid).unwrap());
-                let pk = base64::encode(kp.get_public_key());
+                let pk = general_purpose::STANDARD.encode(kp.get_public_key());
                 headers.insert("X-PubKey", HeaderValue::from_str(&pk).unwrap());
             }
             _ => {
@@ -330,7 +331,7 @@ impl<UT: UpdateTokenTrait, RT: RequestTrait> Request<UT, RT> {
         // We always send the headers incase the request don't have a body
         headers.insert(
             "X-PubKey",
-            HeaderValue::from_str(&base64::encode(kp.get_public_key())).unwrap(),
+            HeaderValue::from_str(&general_purpose::STANDARD.encode(kp.get_public_key())).unwrap(),
         );
         headers.insert(
             "X-HashId",
@@ -382,7 +383,7 @@ impl<UT: UpdateTokenTrait, RT: RequestTrait> Request<UT, RT> {
                     self.ek.as_ref().unwrap().clone().get_public_key().unwrap(),
                 ) {
                     Ok(body) => {
-                        builder = builder.body(base64::encode(body));
+                        builder = builder.body(general_purpose::STANDARD.encode(body));
                     }
                     Err(_error) => return Err(RequestError::EncryptionError),
                 }
@@ -473,7 +474,7 @@ impl<UT: UpdateTokenTrait, RT: RequestTrait> Request<UT, RT> {
     ) -> Option<String> {
         match key {
             // If we have a key from the response, base64 encode and return it
-            Some(key) => Some(base64::encode(key)),
+            Some(key) => Some(general_purpose::STANDARD.encode(key)),
             // If we don't have a key check the header
             None => match header {
                 Some(header) => match header.to_str() {

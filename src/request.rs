@@ -1,11 +1,12 @@
-use libsodium_sys::{
-    crypto_box_MACBYTES as CRYPTO_BOX_MACBYTES, crypto_box_NONCEBYTES as CRYPTO_BOX_NONCEBYTES,
-    crypto_box_PUBLICKEYBYTES as CRYPTO_BOX_PUBLICKEYBYTES,
-    crypto_box_SECRETKEYBYTES as CRYPTO_BOX_SECRETKEYBYTES, crypto_box_easy, crypto_generichash,
-    crypto_scalarmult_base, crypto_sign_BYTES as CRYPTO_SIGN_BYTES,
-    crypto_sign_PUBLICKEYBYTES as CRYPTO_SIGN_PUBLICKEYBYTES,
-    crypto_sign_SECRETKEYBYTES as CRYPTO_SIGN_SECRETKEYBYTES, crypto_sign_detached,
-    crypto_sign_ed25519_sk_to_pk,
+use dryoc::classic::crypto_box;
+use dryoc::classic::crypto_sign;
+use dryoc::classic::crypto_core;
+use dryoc::generichash::GenericHash;
+use dryoc::sign::SigningKeyPair;
+use dryoc::constants::{
+    CRYPTO_BOX_MACBYTES, CRYPTO_BOX_NONCEBYTES, CRYPTO_BOX_PUBLICKEYBYTES,
+    CRYPTO_BOX_SECRETKEYBYTES, CRYPTO_SIGN_BYTES, CRYPTO_SIGN_PUBLICKEYBYTES,
+    CRYPTO_SIGN_SECRETKEYBYTES
 };
 
 use crate::{error::NcryptfError as Error, util::randombytes_buf, VERSION_2_HEADER};
@@ -74,31 +75,17 @@ impl Request {
                     Err(error) => return Err(error),
                 };
 
-                // Extract the public key from the secret key
-                let mut ipk: [u8; CRYPTO_BOX_PUBLICKEYBYTES as usize] =
-                    vec![0; CRYPTO_BOX_PUBLICKEYBYTES as usize]
-                        .try_into()
-                        .unwrap();
+                // Extract the public key from the secret key using scalar multiplication
                 let csk: [u8; CRYPTO_BOX_SECRETKEYBYTES as usize] =
                     self.secret_key.clone().try_into().unwrap();
-                let _result = unsafe { crypto_scalarmult_base(ipk.as_mut_ptr(), csk.as_ptr()) };
-
-                if _result != 0 {
-                    return Err(Error::EncryptError);
-                }
+                let mut ipk = [0u8; CRYPTO_BOX_PUBLICKEYBYTES as usize];
+                crypto_core::crypto_scalarmult_base(&mut ipk, &csk);
 
                 // Convert the signature secret key, into a public key
-                let mut isk: [u8; CRYPTO_SIGN_PUBLICKEYBYTES as usize] =
-                    vec![0; CRYPTO_SIGN_PUBLICKEYBYTES as usize]
-                        .try_into()
-                        .unwrap();
                 let ssk: [u8; CRYPTO_SIGN_SECRETKEYBYTES as usize] =
                     self.signature_secret_key.clone().try_into().unwrap();
-                let _result =
-                    unsafe { crypto_sign_ed25519_sk_to_pk(isk.as_mut_ptr(), ssk.as_ptr()) };
-                if _result != 0 {
-                    return Err(Error::EncryptError);
-                }
+                let keypair: SigningKeyPair<[u8; CRYPTO_SIGN_PUBLICKEYBYTES as usize], [u8; CRYPTO_SIGN_SECRETKEYBYTES as usize]> = SigningKeyPair::from_secret_key(ssk);
+                let isk = keypair.public_key;
 
                 // Calculate the signature
                 let mut signature = match self.sign(data.clone()) {
@@ -116,22 +103,9 @@ impl Request {
 
                 let s: &[u8; CRYPTO_BOX_NONCEBYTES as usize] = &n.clone().try_into().unwrap();
                 let input = payload.clone();
-                let mut hash: [u8; 64] = vec![0; 64].try_into().unwrap();
-
-                let _result = unsafe {
-                    crypto_generichash(
-                        hash.as_mut_ptr(),
-                        64,
-                        input.as_ptr(),
-                        input.len() as u64,
-                        s.as_ptr(),
-                        CRYPTO_BOX_NONCEBYTES as usize,
-                    )
-                };
-
-                if _result != 0 {
-                    return Err(Error::EncryptError);
-                }
+                
+                let hash: [u8; 64] = GenericHash::hash(&input, Some(s))
+                    .map_err(|_| Error::EncryptError)?;
 
                 payload.append(&mut hash.to_vec());
                 return Ok(payload);
@@ -150,33 +124,21 @@ impl Request {
         nonce: Vec<u8>,
     ) -> Result<Vec<u8>, Error> {
         let message = data.into_bytes();
-        let len = message.len();
-
-        let mut ciphertext = Box::new(vec![0u8; len + (CRYPTO_BOX_MACBYTES as usize)]);
         let sk: [u8; CRYPTO_BOX_SECRETKEYBYTES as usize] =
             self.secret_key.clone().try_into().unwrap();
         let pk: [u8; CRYPTO_BOX_PUBLICKEYBYTES as usize] = public_key.clone().try_into().unwrap();
         let n: [u8; CRYPTO_BOX_NONCEBYTES as usize] = nonce.clone().try_into().unwrap();
 
-        let result: i32 = unsafe {
-            crypto_box_easy(
-                ciphertext.as_mut_ptr(),
-                message.as_ptr(),
-                message.len().try_into().unwrap(),
-                n.as_ptr(),
-                pk.as_ptr(),
-                sk.as_ptr(),
-            )
-        };
+        let mut ciphertext = vec![0u8; message.len() + CRYPTO_BOX_MACBYTES as usize];
+        crypto_box::crypto_box_easy(
+            &mut ciphertext,
+            &message,
+            &n,
+            &pk,
+            &sk,
+        ).map_err(|_| Error::EncryptError)?;
 
-        match result {
-            0 => {
-                return Ok(ciphertext.to_vec());
-            }
-            _ => {
-                return Err(Error::DecryptError);
-            }
-        }
+        return Ok(ciphertext);
     }
 
     /// Returns the nonce
@@ -186,24 +148,15 @@ impl Request {
 
     /// Signs the given data, then returns a detached signature
     pub fn sign(&self, data: String) -> Result<Vec<u8>, Error> {
-        let mut signature = [0u8; (CRYPTO_SIGN_BYTES as usize)];
         let key: [u8; CRYPTO_SIGN_SECRETKEYBYTES as usize] =
             self.signature_secret_key.clone().try_into().unwrap();
 
-        let mut signature_size = signature.len() as u64;
-        let _result = unsafe {
-            crypto_sign_detached(
-                signature.as_mut_ptr(),
-                &mut signature_size,
-                data.as_ptr(),
-                data.len() as u64,
-                key.as_ptr(),
-            )
-        };
-
-        if _result != 0 {
-            return Err(Error::EncryptError);
-        }
+        let mut signature = [0u8; CRYPTO_SIGN_BYTES as usize];
+        crypto_sign::crypto_sign_detached(
+            &mut signature,
+            data.as_bytes(),
+            &key,
+        ).map_err(|_| Error::EncryptError)?;
 
         return Ok(signature.to_vec());
     }

@@ -1,10 +1,11 @@
 extern crate base64;
+use base64::{engine::general_purpose, Engine as _};
 use chrono::{offset::Utc, DateTime};
 
-use libsodium_sys::{
-    crypto_generichash, crypto_sign_PUBLICKEYBYTES as CRYPTO_SIGN_PUBLICKEYBYTES,
-    crypto_sign_SECRETKEYBYTES as CRYPTO_SIGN_SECRETKEYBYTES, crypto_sign_keypair,
+use dryoc::constants::{
+    CRYPTO_SIGN_PUBLICKEYBYTES, CRYPTO_SIGN_SECRETKEYBYTES
 };
+use dryoc::generichash::GenericHash;
 
 use crate::Keypair;
 
@@ -27,7 +28,7 @@ impl Signature {
         };
 
         let hash = Self::get_signature_hash(payload, salt.clone(), v);
-        let b64s = base64::encode(salt);
+        let b64s = general_purpose::STANDARD.encode(salt);
         let ts = datetime.format("%a, %d %b %Y %H:%M:%S %z").to_string();
 
         return format!("{}\n{}+{}\n{}\n{}", hash, method, uri, ts, b64s);
@@ -44,7 +45,9 @@ impl Signature {
                 .try_into()
                 .unwrap();
 
-        let _result = unsafe { crypto_sign_keypair(pk.as_mut_ptr(), sk.as_mut_ptr()) };
+        let result = dryoc::sign::SigningKeyPair::gen_with_defaults();
+        sk.copy_from_slice(&result.secret_key.as_ref());
+        pk.copy_from_slice(&result.public_key.as_ref());
 
         return Keypair {
             secret_key: sk.to_vec(),
@@ -56,22 +59,13 @@ impl Signature {
     pub fn get_signature_hash(data: String, salt: Vec<u8>, version: Option<i8>) -> String {
         match version {
             Some(2) => {
-                let s: &[u8; 32] = &salt.try_into().unwrap();
+                let salt_key: &[u8; 32] = &salt.try_into().unwrap();
                 let input = data.as_bytes();
-                let mut hash: [u8; 64] = vec![0; 64].try_into().unwrap();
+                
+                let hash: [u8; 64] = GenericHash::hash(input, Some(salt_key))
+                    .expect("Failed to compute generic hash");
 
-                let _result = unsafe {
-                    crypto_generichash(
-                        hash.as_mut_ptr(),
-                        64,
-                        input.as_ptr(),
-                        input.len() as u64,
-                        s.as_ptr(),
-                        32,
-                    )
-                };
-
-                return base64::encode(&hash);
+                return general_purpose::STANDARD.encode(&hash);
             }
             _ => {
                 return sha256::digest(data);

@@ -1,4 +1,4 @@
-use base64;
+use base64::{Engine as _, engine::general_purpose};
 use ncryptf::*;
 use reqwest::header::{HeaderMap, HeaderValue};
 
@@ -57,7 +57,7 @@ fn bootstrap() -> Option<serde_json::Value> {
     let result = client
         .get(format!("{}/ek", c.clone().url.unwrap()))
         .headers(c.get_headers())
-        .header("x-pubkey", base64::encode(c.clone().key.get_public_key()))
+        .header("x-pubkey", general_purpose::STANDARD.encode(c.clone().key.get_public_key()))
         .send();
 
     match result {
@@ -71,7 +71,7 @@ fn bootstrap() -> Option<serde_json::Value> {
             let response = r.unwrap();
             assert_eq!(resp.status(), 200);
 
-            let data = base64::decode(resp.text().unwrap());
+            let data = general_purpose::STANDARD.decode(resp.text().unwrap());
             let d = response.decrypt(data.unwrap(), None, None);
             assert!(d.is_ok());
             let plain = d.unwrap();
@@ -124,9 +124,9 @@ fn test_unauthenticated_encrypted_request() {
     let pk = stack.get("public").unwrap().as_str().unwrap();
 
     let payload: serde_json::Value = serde_json::from_str(r#"{ "hello": "world" }"#).unwrap();
-    let encrypted_payload = match request.encrypt(payload.to_string(), base64::decode(pk).unwrap())
+    let encrypted_payload = match request.encrypt(payload.to_string(), general_purpose::STANDARD.decode(pk).unwrap())
     {
-        Ok(ec) => base64::encode(ec),
+        Ok(ec) => general_purpose::STANDARD.encode(ec),
         Err(_error) => {
             dbg!(_error);
             assert!(false);
@@ -154,7 +154,7 @@ fn test_unauthenticated_encrypted_request() {
             assert!(r.is_ok());
             let response = r.unwrap();
 
-            let data = base64::decode(resp.text().unwrap());
+            let data = general_purpose::STANDARD.decode(resp.text().unwrap());
             let d = response.decrypt(data.unwrap(), None, None);
             assert!(d.is_ok());
             let plain = d.unwrap();
@@ -196,9 +196,9 @@ fn test_authenticated_encrypted_request() {
     }"#,
     )
     .unwrap();
-    let encrypted_payload = match request.encrypt(payload.to_string(), base64::decode(pk).unwrap())
+    let encrypted_payload = match request.encrypt(payload.to_string(), general_purpose::STANDARD.decode(pk).unwrap())
     {
-        Ok(ec) => base64::encode(ec),
+        Ok(ec) => general_purpose::STANDARD.encode(ec),
         Err(_error) => {
             assert!(false);
             panic!("Test aborted");
@@ -225,7 +225,7 @@ fn test_authenticated_encrypted_request() {
             assert!(r.is_ok());
             let response = r.unwrap();
 
-            let data = base64::decode(resp.text().unwrap());
+            let data = general_purpose::STANDARD.decode(resp.text().unwrap());
             let d = response.decrypt(data.unwrap(), None, None);
             assert!(d.is_ok());
             let plain = d.unwrap();
@@ -274,8 +274,8 @@ fn test_authenticated_encrypted_request() {
             let payload: serde_json::Value =
                 serde_json::from_str(r#"{ "hello": "world" }"#).unwrap();
             let encrypted_payload =
-                match request.encrypt(payload.to_string(), base64::decode(pk).unwrap()) {
-                    Ok(ec) => base64::encode(ec),
+                match request.encrypt(payload.to_string(), general_purpose::STANDARD.decode(pk).unwrap()) {
+                    Ok(ec) => general_purpose::STANDARD.encode(ec),
                     Err(_error) => {
                         dbg!(_error);
                         assert!(false);
@@ -313,7 +313,7 @@ fn test_authenticated_encrypted_request() {
                     assert!(r.is_ok());
                     let response = r.unwrap();
 
-                    let data = base64::decode(resp.text().unwrap());
+                    let data = general_purpose::STANDARD.decode(resp.text().unwrap());
                     let d = response.decrypt(data.unwrap(), None, None);
                     assert!(d.is_ok());
                     let plain = d.unwrap();

@@ -1,4 +1,5 @@
 use crate::{Keypair, Signature};
+use base64::{engine::general_purpose, Engine as _};
 use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 
@@ -26,7 +27,7 @@ impl ExportableEncryptionKeyData {
             return None;
         }
 
-        return Some(base64::decode(self.public.clone()).unwrap());
+        return Some(general_purpose::STANDARD.decode(self.public.clone()).unwrap());
     }
 
     /// Returns the signature key as a Vec
@@ -35,7 +36,7 @@ impl ExportableEncryptionKeyData {
             return None;
         }
 
-        return Some(base64::decode(self.signature.clone()).unwrap());
+        return Some(general_purpose::STANDARD.decode(self.signature.clone()).unwrap());
     }
 }
 
@@ -173,8 +174,8 @@ macro_rules! ek_route {
             };
 
             return Ok(ncryptf::rocket::Json(ExportableEncryptionKeyData {
-                public: base64::encode(ek.get_box_kp().get_public_key()),
-                signature: base64::encode(ek.get_sign_kp().get_public_key()),
+                public: general_purpose::STANDARD.encode(ek.get_box_kp().get_public_key()),
+                signature: general_purpose::STANDARD.encode(ek.get_sign_kp().get_public_key()),
                 hash_id: ek.get_hash_id(),
                 ephemeral: true,
                 expires_at: ek.expires_at,
