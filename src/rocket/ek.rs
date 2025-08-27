@@ -1,6 +1,6 @@
 use crate::{Keypair, Signature};
 use base64::{engine::general_purpose, Engine as _};
-use rand::{distributions::Alphanumeric, Rng};
+use rand::{distr::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 
 /// Reusable encryption key data for client parsing
@@ -84,7 +84,7 @@ impl EncryptionKey {
 
     /// Creates a new struct with an ephemeral flag set
     pub fn new(ephemeral: bool) -> Self {
-        let s: String = rand::thread_rng()
+        let s: String = rand::rng()
             .sample_iter(&Alphanumeric)
             .take(24)
             .map(char::from)
