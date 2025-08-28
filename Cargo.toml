@@ -5,7 +5,7 @@ description = "Secure API authentication and end to end encryption."
 repository = "https://github.com/ncryptf/ncryptf-rs"
 license = "BSD-3-Clause"
 categories = ["cryptography", "authentication", "api-bindings"]
-version = "0.4.2"
+version = "0.5.0"
 edition = "2021"
 
 [dependencies]
@@ -22,27 +22,26 @@ serde_json = { version = "1", features = ["raw_value"] }
 constant_time_eq = { version = "^0.4" }
 hex = { version =  "^0.4" }
 rand = { version = "^0.9" }
-rocket = { version = "^0.5", features = ["tls", "secrets", "json"], optional = true  }
-rocket_db_pools = { version = "^0.2",  features = ["deadpool_redis"], optional = true }
-rocket_dyn_templates = { version = "^0.2",  features = ["handlebars"], optional = true }
+rocket = { version = "^0.5", features = ["tls", "secrets", "json"], optional = true }
 async-trait = { version = "^0.1", optional = true }
 async-std = { version = "^1.12", optional = true }
 reqwest = { version = "^0.12", default-features = false, features = ["json", "rustls-tls", "brotli", "gzip", "stream"], optional = true }
 tracing = { version = "^0.1"  }
 async-recursion = { version = "^1.0", optional = true }
 anyhow = { version = "^1.0", optional = true }
+cached = { version = "^0.56", optional = true, features = ["async", "async-trait", "redis_store"] }
+moka = { version = "^0.12", optional = true, features = ["sync"] }
 
 [lib]
 name = "ncryptf"
 
 [features]
 default = []
-rocket = ["dep:rocket", "dep:rocket_db_pools", "dep:async-trait", "dep:rocket_dyn_templates", "anyhow"]
+rocket = ["dep:rocket", "dep:async-trait", "anyhow", "dep:cached", "dep:moka"]
 client = ["dep:reqwest", "dep:async-recursion"]
 
 [dev-dependencies]
 reqwest = { version = "^0.12", default-features = false,  features = ["json", "blocking"] }
-redis = { version = "^0.32" }
 
 [badges]
 github = { repository = "https://github.com/ncryptf/ncryptf-rs" }

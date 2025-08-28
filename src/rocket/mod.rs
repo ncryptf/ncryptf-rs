@@ -1,5 +1,4 @@
-use crate::rocket::json::Error;
-use std::io;
+use rocket::Request;
 
 /// The Ncryptf JSON content type
 pub const NCRYPTF_CONTENT_TYPE: &str = "application/vnd.ncryptf+json";
@@ -20,51 +19,98 @@ pub use ek::{EncryptionKey, ExportableEncryptionKeyData};
 mod auth;
 pub use auth::{AuthorizationTrait, TokenError, RequestData, *};
 
-use rocket_db_pools::deadpool_redis::redis;
+use cached::{Cached, IOCached};
+use std::sync::{Arc, Mutex};
 
-#[doc(hidden)]
-pub(crate) fn get_cache<'r>(req: &'r Request<'_>) -> Result<redis::Connection, Error<'r>> {
-    // Retrieve the redis connection string from the figment
-    let rdb = match req.rocket().figment().find_value("databases.cache") {
-        Ok(config) => {
-            let url = config.find("url");
-            if url.is_some() {
-                let o = url.to_owned().unwrap();
-                o.into_string().unwrap()
-            } else {
-                return Err(Error::Io(io::Error::new(
-                    io::ErrorKind::Other,
-                    "Unable to retrieve Redis faring configuration.",
-                )));
+/// A wrapper for supported cache types
+pub enum CacheWrapper {
+    TimedCache(Arc<Mutex<cached::TimedCache<String, EncryptionKey>>>),
+    UnboundCache(Arc<Mutex<cached::UnboundCache<String, EncryptionKey>>>),
+    RedisCache(Arc<Mutex<cached::RedisCache<String, EncryptionKey>>>),
+}
+
+impl CacheWrapper {
+    pub fn get(&self, key: &str) -> Option<EncryptionKey> {
+        match self {
+            CacheWrapper::TimedCache(cache) => {
+                let mut guard = cache.lock().ok()?;
+                guard.cache_get(&key.to_string()).cloned()
+            }
+            CacheWrapper::UnboundCache(cache) => {
+                let mut guard = cache.lock().ok()?;
+                guard.cache_get(&key.to_string()).cloned()
+            }
+            CacheWrapper::RedisCache(cache) => {
+                let guard = cache.lock().ok()?;
+                match guard.cache_get(&key.to_string()) {
+                    Ok(value) => value,
+                    Err(_) => None,
+                }
             }
         }
-        Err(error) => {
-            return Err(Error::Io(io::Error::new(
-                io::ErrorKind::Other,
-                error.to_string(),
-            )));
+    }
+    
+    pub fn set(&self, key: String, value: EncryptionKey) {
+        match self {
+            CacheWrapper::TimedCache(cache) => {
+                if let Ok(mut guard) = cache.lock() {
+                    guard.cache_set(key, value);
+                }
+            }
+            CacheWrapper::UnboundCache(cache) => {
+                if let Ok(mut guard) = cache.lock() {
+                    guard.cache_set(key, value);
+                }
+            }
+            CacheWrapper::RedisCache(cache) => {
+                if let Ok(guard) = cache.lock() {
+                    let _ = guard.cache_set(key, value);
+                }
+            }
         }
-    };
+    }
+    
+    pub fn remove(&self, key: &str) -> Option<EncryptionKey> {
+        match self {
+            CacheWrapper::TimedCache(cache) => {
+                let mut guard = cache.lock().ok()?;
+                guard.cache_remove(&key.to_string())
+            }
+            CacheWrapper::UnboundCache(cache) => {
+                let mut guard = cache.lock().ok()?;
+                guard.cache_remove(&key.to_string())
+            }
+            CacheWrapper::RedisCache(cache) => {
+                let guard = cache.lock().ok()?;
+                match guard.cache_remove(&key.to_string()) {
+                    Ok(value) => value,
+                    Err(_) => None,
+                }
+            }
+        }
+    }
+}
 
-    // Create a new client
-    let client = match redis::Client::open(rdb) {
-        Ok(client) => client,
-        Err(error) => {
-            return Err(Error::Io(io::Error::new(
-                io::ErrorKind::Other,
-                error.to_string(),
-            )));
-        }
-    };
+/// Get the managed cache from Rocket state
+/// Returns a cache wrapper that can handle different cache types
+#[doc(hidden)]
+pub fn get_cache(req: &Request<'_>) -> Result<CacheWrapper, anyhow::Error> {
+    // Try cached::TimedCache
+    if let Some(cache) = req.rocket().state::<Arc<Mutex<cached::TimedCache<String, EncryptionKey>>>>() {
+        return Ok(CacheWrapper::TimedCache(cache.clone()));
+    }
+    
+    // Try cached::UnboundCache
+    if let Some(cache) = req.rocket().state::<Arc<Mutex<cached::UnboundCache<String, EncryptionKey>>>>() {
+        return Ok(CacheWrapper::UnboundCache(cache.clone()));
+    }
 
-    // Retrieve the connection string
-    match client.get_connection() {
-        Ok(conn) => return Ok(conn),
-        Err(error) => {
-            return Err(Error::Io(io::Error::new(
-                io::ErrorKind::Other,
-                error.to_string(),
-            )));
-        }
-    };
+    // Try cached::RedisCache
+    if let Some(cache) = req.rocket().state::<Arc<Mutex<cached::RedisCache<String, EncryptionKey>>>>() {
+        return Ok(CacheWrapper::RedisCache(cache.clone()));
+    }
+
+    Err(anyhow::anyhow!(
+        "No supported cache found in rocket state. Make sure to add your cache as managed state with .manage(Arc::new(Mutex::new(your_cache)))"
+    ))
 }

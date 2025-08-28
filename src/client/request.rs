@@ -14,7 +14,7 @@ pub enum RequestError {
     ReqwestError(#[from] reqwest::Error),
     #[error("unable to create authorization")]
     AuthConstructionError,
-    #[error("bootstrapping encrypted requst failed.")]
+    #[error("bootstrapping encrypted request failed.")]
     ReKeyError,
     #[error("handling the response failed")]
     HandlingResponse(#[from] crate::client::ResponseError),

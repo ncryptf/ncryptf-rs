@@ -2,7 +2,7 @@ use std::{error, fmt, io};
 
 use base64::{engine::general_purpose, Engine as _};
 use super::{
-    get_cache, EncryptionKey, RequestPublicKey, RequestSigningPublicKey,
+    CacheWrapper, EncryptionKey, RequestPublicKey, RequestSigningPublicKey,
     NCRYPTF_CONTENT_TYPE,
 };
 use anyhow::anyhow;
@@ -10,13 +10,10 @@ use rocket::{
     data::{FromData, Limits, Outcome},
     http::{ContentType, Header, Status},
     response::{self, Responder, Response},
-    Data, Request,
+    Data, Request, State,
 };
 
 use serde::{Deserialize, Serialize};
-
-#[allow(unused_imports)] // for rust-analyzer
-use rocket_db_pools::deadpool_redis::redis::Commands;
 
 // Error returned by the [`Json`] guard when JSON deserialization fails.
 #[derive(Debug)]
@@ -109,18 +106,12 @@ impl<T> Json<T> {
     pub fn deserialize_req_from_string<'r>(
         req: &'r Request<'_>,
         string: String,
+        cache: &CacheWrapper,
     ) -> Result<String, Error<'r>> {
         match req.headers().get_one("Content-Type") {
             Some(h) => {
                 match h {
                     NCRYPTF_CONTENT_TYPE => {
-                        // Retrieve the redis connection
-                        let mut conn: rocket_db_pools::deadpool_redis::redis::Connection =
-                            match get_cache(req) {
-                                Ok(conn) => conn,
-                                Err(error) => return Err(error),
-                            };
-
                         // Convert the base64 payload into Vec<u8>
                         let data = general_purpose::STANDARD.decode(string).unwrap();
 
@@ -135,23 +126,10 @@ impl<T> Json<T> {
                             }
                         };
 
-                        // Retrive the JSON struct for the encryption key
-                        let json = match conn.get(hash_id) {
-                            Ok(k) => k,
-                            Err(_error) => "".to_string(),
-                        };
-
-                        if json.is_empty() {
-                            return Err(Error::Io(io::Error::new(
-                                io::ErrorKind::Other,
-                                "Encryption key is either invalid, or may have expired.",
-                            )));
-                        }
-
-                        // Deserialize the encryption key into a useful struct
-                        let ek: EncryptionKey = match serde_json::from_str(&json) {
-                            Ok(ek) => ek,
-                            Err(_error) => {
+                        // Retrieve the encryption key from cache
+                        let ek = match cache.get(hash_id) {
+                            Some(ek) => ek,
+                            None => {
                                 return Err(Error::Io(io::Error::new(
                                     io::ErrorKind::Other,
                                     "Encryption key is either invalid, or may have expired.",
@@ -164,10 +142,7 @@ impl<T> Json<T> {
 
                         // Delete the key if it is ephemeral
                         if ek.is_ephemeral() {
-                            match conn.del(hash_id) {
-                                Ok(k) => k,
-                                Err(_) => {}
-                            };
+                            cache.remove(hash_id);
                         }
 
                         // Decrypt the response, then deserialize the underlying JSON into the requested struct
@@ -338,7 +313,18 @@ pub async fn parse_body<'r, T: Deserialize<'r>>(req: &'r Request<'_>, data: Data
         Err(error) => return Err(Error::Io(error)),
     };
 
-    match Json::<T>::deserialize_req_from_string(req, string) {
+    // Get the cache from managed state
+    let cache = match req.rocket().state::<CacheWrapper>() {
+        Some(cache) => cache,
+        None => {
+            return Err(Error::Io(io::Error::new(
+                io::ErrorKind::Other,
+                "Cache not found in managed state",
+            )));
+        }
+    };
+
+    match Json::<T>::deserialize_req_from_string(req, string, cache) {
         Ok(s) => {
             return Json::<T>::from_str(req.local_cache(|| return s));
         }
@@ -379,20 +365,15 @@ pub fn respond_to_with_ncryptf<'r, 'a, T: serde::Serialize>(
                     }
 
                     let ek = EncryptionKey::new(false);
-                    let d = serde_json::to_string(&ek).unwrap();
 
-                    // Create an encryption key then store it in Redis
+                    // Create an encryption key then store it in cache
                     // The client can choose to use the new key or ignore it, but we're always going to provide our own for each request
-                    let mut conn: rocket_db_pools::deadpool_redis::redis::Connection =
-                        match get_cache(req) {
-                            Ok(conn) => conn,
-                            Err(_error) => return Err(anyhow!("Unable to connect to Redis.")),
-                        };
-
-                    match conn.set_ex(ek.get_hash_id(), d, 3600) {
-                        Ok(r) => r,
-                        Err(_) => {}
+                    let cache = match req.rocket().state::<CacheWrapper>() {
+                        Some(cache) => cache,
+                        None => return Err(anyhow!("Cache not found in managed state")),
                     };
+
+                    cache.set(ek.get_hash_id(), ek.clone());
 
                     let mut request = match crate::Request::from(
                         ek.get_box_kp().get_secret_key(),

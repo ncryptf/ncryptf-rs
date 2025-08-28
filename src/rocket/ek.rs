@@ -105,73 +105,67 @@ impl EncryptionKey {
 /// EkRoute provides a generic route which you can use to generate ephemeral (single use) encryption keys to bootstrap your request/response cycle within your application.
 ///
 /// ### Setup
-///  1. Ncryptf utilizes Redis as a shared backend cache. You must have a functional Redis server available to utilize this functionality.
-///  2. Create a rocket_db_pool for Redis with the `cache` Database name.
+///  1. Create a cache using one of the supported cache types:
 ///
 ///      ```rust
-///      use rocket_db_pools::{Database, deadpool_redis};
+///      use cached::{TimedCache, UnboundCache};
+///      use std::sync::{Arc, Mutex};
+///      use ncryptf::rocket::{EncryptionKey, CacheWrapper};
 ///
-///      #[derive(Database)]
-///      #[database("cache")]
-///      pub struct RedisDb(deadpool_redis::Pool);
+///      // TimedCache with 1 hour expiration
+///      let timed_cache = Arc::new(Mutex::new(TimedCache::with_lifespan(3600)));
+///      let cache_wrapper = CacheWrapper::TimedCache(timed_cache);
+///      
+///      // Or UnboundCache (no automatic expiration)
+///      let unbound_cache = Arc::new(Mutex::new(UnboundCache::new()));
+///      let cache_wrapper = CacheWrapper::UnboundCache(unbound_cache);
+///
+///      // Or RedisCache (requires redis feature)
+///      let redis_cache = Arc::new(Mutex::new(
+///          cached::RedisCache::new("redis://127.0.0.1/", std::time::Duration::from_secs(3600))
+///              .build().unwrap()
+///      ));
+///      let cache_wrapper = CacheWrapper::RedisCache(redis_cache);
 ///      ```
 ///
-///  3. Add a Redis DB Pool figment to your Rocket build configuration:
+///  2. Add the CacheWrapper as managed state to your Rocket instance:
 ///
 ///      ```rust
-///      let config = rocket::Config::figment()
-///          [... other configurations here...]
-///          .merge(("databases.cache", rocket_db_pools::Config {
-///              url: format!("redis://127.0.0.1:6379/"),
-///              min_connections: None,
-///              max_connections: 1024,
-///              connect_timeout: 3,
-///              idle_timeout: None,
-///          }));
+///      let rocket = rocket::build()
+///          .manage(cache_wrapper)
+///          .mount("/ncryptf", routes![ncryptf_ek_route]);
 ///      ```
 ///
-///  4. Attach the figment to your rocket instance:
+///  3. Call the setup macro to instantiate the route:
 ///
 ///      ```rust
-///      let rocket = rocket::custom(config).attach(RedisDb::init());
+///      ncryptf::ek_route!();
 ///      ```
 ///
-///  5. Call the setup macro to instantiate the route:
+///  4. Mount the route `ncryptf_ek_route` exposed by the macro.
 ///
-///  ```rust
-///  ncryptf::ek_route!(RedisDb);
-///  ```
+/// ### Features
+/// - **Unified Cache Interface**: Works with TimedCache, UnboundCache, and RedisCache through CacheWrapper
+/// - **Automatic Cache Management**: No need to manually handle different cache types
+/// - **Simple Integration**: Just manage a single CacheWrapper state instead of multiple cache types
+/// - **Parameterless Macro**: No arguments needed - the macro detects the managed cache automatically
 ///
-///  6. Mount the route `ncryptf_ek_route` exposed by the macro. The following mount will make the route available at`/ncryptf/ek`
-///
-///  ```rust
-///  rocket .mount("/ncryptf", routes![ncryptf_ek_route]);
-///  ```
+/// Note: The CacheWrapper abstracts over all supported cache types: `TimedCache<String, EncryptionKey>`, `UnboundCache<String, EncryptionKey>`, and `RedisCache<String, EncryptionKey>`
 #[macro_export]
 macro_rules! ek_route {
-    ($T: ty) => {
-        use rocket::{get, http::Status};
-        #[allow(unused_imports)] // for rust-analyzer
-        use rocket_db_pools::deadpool_redis::redis::AsyncCommands;
-        use rocket_db_pools::{Connection as RedisConnection, Database};
-
-        use ncryptf::rocket::{EncryptionKey, ExportableEncryptionKeyData};
-        use serde::{Deserialize, Serialize};
+    () => {
+        use rocket::{get, http::Status, State};
+        use ncryptf::rocket::{EncryptionKey, ExportableEncryptionKeyData, CacheWrapper};
+        use base64::{Engine as _, engine::general_purpose};
 
         #[get("/ek")]
         pub async fn ncryptf_ek_route(
-            rdb: RedisConnection<$T>,
+            cache: &State<CacheWrapper>,
         ) -> Result<ncryptf::rocket::Json<ExportableEncryptionKeyData>, Status> {
             let ek = EncryptionKey::new(true);
-            let mut redis: rocket_db_pools::deadpool_redis::Connection = rdb.into_inner();
-
-            let _result = match redis
-                .set_ex(ek.get_hash_id(), serde_json::to_string(&ek).unwrap(), 3600)
-                .await
-            {
-                Ok(result) => result,
-                Err(_) => return Err(Status::InternalServerError),
-            };
+            
+            // Store the encryption key in the cache
+            cache.set(ek.get_hash_id(), ek.clone());
 
             return Ok(ncryptf::rocket::Json(ExportableEncryptionKeyData {
                 public: general_purpose::STANDARD.encode(ek.get_box_kp().get_public_key()),

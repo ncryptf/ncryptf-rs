@@ -1,7 +1,7 @@
 use crate::error::NcryptfError as Error;
 use serde::{Deserialize, Serialize};
 
-use dryoc::{constants::{CRYPTO_BOX_PUBLICKEYBYTES, CRYPTO_BOX_SECRETKEYBYTES}, dryocbox};
+use dryoc::{constants::{CRYPTO_BOX_PUBLICKEYBYTES, CRYPTO_BOX_SECRETKEYBYTES}, classic::crypto_box::crypto_box_keypair};
 
 /// Represents a generic keypair
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -13,18 +13,7 @@ pub struct Keypair {
 impl Keypair {
     /// Generates a new keypair for encryption
     pub fn new() -> Self {
-        let mut sk: [u8; CRYPTO_BOX_SECRETKEYBYTES as usize] =
-            vec![0; CRYPTO_BOX_SECRETKEYBYTES as usize]
-                .try_into()
-                .unwrap();
-        let mut pk: [u8; CRYPTO_BOX_PUBLICKEYBYTES as usize] =
-            vec![0; CRYPTO_BOX_PUBLICKEYBYTES as usize]
-                .try_into()
-                .unwrap();
-
-        let result = dryocbox::KeyPair::new();
-        sk.copy_from_slice(&result.secret_key.as_ref());
-        pk.copy_from_slice(&result.public_key.as_ref());
+        let (pk, sk) = crypto_box_keypair();
         return Keypair {
             secret_key: sk.to_vec(),
             public_key: pk.to_vec(),

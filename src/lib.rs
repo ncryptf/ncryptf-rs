@@ -23,9 +23,3 @@ pub mod rocket;
 
 #[cfg(feature = "client")]
 pub mod client;
-
-#[cfg(feature = "rocket")]
-pub use rocket_db_pools::*;
-
-#[cfg(feature = "rocket")]
-pub use rocket_dyn_templates::*;

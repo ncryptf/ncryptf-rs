@@ -2,10 +2,8 @@ extern crate base64;
 use base64::{engine::general_purpose, Engine as _};
 use chrono::{offset::Utc, DateTime};
 
-use dryoc::constants::{
-    CRYPTO_SIGN_PUBLICKEYBYTES, CRYPTO_SIGN_SECRETKEYBYTES
-};
 use dryoc::generichash::GenericHash;
+use dryoc::classic::crypto_sign::crypto_sign_keypair;
 
 use crate::Keypair;
 
@@ -36,18 +34,7 @@ impl Signature {
 
     /// Generates a new random signature
     pub fn new() -> Keypair {
-        let mut sk: [u8; CRYPTO_SIGN_SECRETKEYBYTES as usize] =
-            vec![0; CRYPTO_SIGN_SECRETKEYBYTES as usize]
-                .try_into()
-                .unwrap();
-        let mut pk: [u8; CRYPTO_SIGN_PUBLICKEYBYTES as usize] =
-            vec![0; CRYPTO_SIGN_PUBLICKEYBYTES as usize]
-                .try_into()
-                .unwrap();
-
-        let result = dryoc::sign::SigningKeyPair::gen_with_defaults();
-        sk.copy_from_slice(&result.secret_key.as_ref());
-        pk.copy_from_slice(&result.public_key.as_ref());
+        let (pk, sk) = crypto_sign_keypair();
 
         return Keypair {
             secret_key: sk.to_vec(),

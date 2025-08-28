@@ -1,8 +1,8 @@
 use ncryptf::{ek_route, randombytes_buf, rocket::ExportableEncryptionKeyData};
-use redis::Commands;
 use rocket::{http::Header, local::blocking::Client, serde::Serialize};
 use serde::Deserialize;
-use rocket_db_pools::{deadpool_redis, Database};
+use base64::{Engine as _, engine::general_purpose};
+use cached::Cached;
 
 // This is a mock user used to simplify return data
 #[derive(Debug, Clone)]
@@ -16,15 +16,15 @@ impl ncryptf::rocket::AuthorizationTrait for User {
     /// Our static implementation returns a static token
     async fn get_token_from_access_token(
         _access_token: String,
-        _f: rocket_db_pools::figment::Figment,
+        _f: rocket::figment::Figment,
     ) -> Result<ncryptf::Token, ncryptf::rocket::TokenError> {
         let now = chrono::Utc::now().timestamp();
 
         let token =  ncryptf::Token::from(
             "x2gMeJ5Np0CcKpZav+i9iiXeQBtaYMQ/yeEtcOgY3J".to_string(),
             "LRSEe5zHb1aq20Hr9te2sQF8sLReSkO8bS1eD/9LDM8".to_string(),
-            base64::decode("f2mTaH9vkZZQyF7SxVeXDlOSDbVwjUzhdXv2T/YYO8k=").unwrap().to_vec(),
-            base64::decode("7v/CdiGoEI7bcj7R2EyDPH5nrCd2+7rHYNACB+Kf2FMx405und2KenGjNpCBPv0jOiptfHJHiY3lldAQTGCdqw==").unwrap().to_vec(),
+            general_purpose::STANDARD.decode("f2mTaH9vkZZQyF7SxVeXDlOSDbVwjUzhdXv2T/YYO8k=").unwrap().to_vec(),
+            general_purpose::STANDARD.decode("7v/CdiGoEI7bcj7R2EyDPH5nrCd2+7rHYNACB+Kf2FMx405und2KenGjNpCBPv0jOiptfHJHiY3lldAQTGCdqw==").unwrap().to_vec(),
             now + 14400
         ).unwrap();
 
@@ -34,15 +34,11 @@ impl ncryptf::rocket::AuthorizationTrait for User {
     /// Returns a static user from an authorization token
     async fn get_user_from_token(
         _token: ncryptf::Token,
-        _f: rocket_db_pools::figment::Figment,
+        _f: rocket::figment::Figment,
     ) -> Result<Box<Self>, ncryptf::rocket::TokenError> {
         return Ok(Box::new(User { id: 1 }));
     }
 }
-
-#[derive(Database)]
-#[database("cache")]
-pub struct RedisDb(deadpool_redis::Pool);
 
 /// A simple test struct
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -87,34 +83,18 @@ fn auth_only(
 
 /// Setup helper function
 fn setup() -> Client {
+    let cache = get_or_create_cache();
     let config = rocket::Config::figment()
         .merge(("ident", false))
-        .merge((
-            "databases.cache",
-            rocket_db_pools::Config {
-                url: format!("redis://127.0.0.1:6379/"),
-                min_connections: None,
-                max_connections: 1024,
-                connect_timeout: 3,
-                idle_timeout: None,
-            },
-        ))
-        .merge((
-            "databases.cache2",
-            rocket_db_pools::Config {
-                url: format!("redis://127.0.0.1:6379/"),
-                min_connections: None,
-                max_connections: 1024,
-                connect_timeout: 3,
-                idle_timeout: None,
-            },
-        ))
         .merge(("log_level", rocket::config::LogLevel::Normal));
 
-    ek_route!(RedisDb);
+    ek_route!();
+
+    // Create a CacheWrapper with our TimedCache
+    let cache_wrapper = ncryptf::rocket::CacheWrapper::TimedCache(cache);
 
     let rocket = rocket::custom(config)
-        .attach(RedisDb::init())
+        .manage(cache_wrapper)
         .mount("/", routes![echo, auth_echo, echo2, auth_only])
         .mount("/ncryptf", routes![ncryptf_ek_route]);
     
@@ -127,33 +107,29 @@ fn setup() -> Client {
     };
 }
 
+use std::sync::{Arc, Mutex};
+
+// Global cache for testing - this allows get_ek() to share the same cache as the Rocket instance
+static GLOBAL_CACHE: std::sync::OnceLock<Arc<Mutex<cached::TimedCache<String, ncryptf::rocket::EncryptionKey>>>> = std::sync::OnceLock::new();
+
+fn get_or_create_cache() -> Arc<Mutex<cached::TimedCache<String, ncryptf::rocket::EncryptionKey>>> {
+    GLOBAL_CACHE.get_or_init(|| {
+        let cache = cached::TimedCache::with_lifespan_and_refresh(
+            std::time::Duration::from_secs(3600),
+            true
+        );
+        Arc::new(Mutex::new(cache))
+    }).clone()
+}
+
 fn get_ek() -> ncryptf::rocket::EncryptionKey {
-    let rdb = "redis://127.0.0.1/".to_string();
-    // Create a new client
-    let client = match redis::Client::open(rdb) {
-        Ok(client) => client,
-        Err(_error) => {
-            panic!("Client couldn't be created");
-        }
-    };
-
-    // Retrieve the connection string
-    let mut conn: redis::Connection = match client.get_connection() {
-        Ok(conn) => conn,
-        Err(_error) => {
-            panic!("Could not open Redis database.");
-        }
-    };
-
     let ek = ncryptf::rocket::EncryptionKey::new(false);
-    let d = serde_json::to_string(&ek).unwrap();
-
-    match conn.set(ek.get_hash_id(), d) {
-        Ok(r) => r,
-        Err(_) => {
-            panic!("Could not set database value.");
-        }
-    };
+    
+    // Store in the shared cache
+    let cache = get_or_create_cache();
+    if let Ok(mut cache_guard) = cache.lock() {
+        cache_guard.cache_set(ek.get_hash_id(), ek.clone());
+    }
 
     return ek;
 }
@@ -178,8 +154,8 @@ fn test_ek_route_plain() {
             assert_ne!(json.signature, "".to_string());
 
             // Verify that the data is the correct length and that we deserialized the struct correctly.
-            let signature = base64::decode(json.signature);
-            let public = base64::decode(json.public);
+            let signature = general_purpose::STANDARD.decode(json.signature);
+            let public = general_purpose::STANDARD.decode(json.public);
             assert!(signature.is_ok());
             assert!(public.is_ok());
             let s = signature.unwrap();
@@ -210,7 +186,7 @@ fn test_echo() {
         .unwrap()
         .encrypt(json.to_string(), ek.get_box_kp().get_public_key())
         .unwrap();
-    let astr = base64::encode(req_body.clone());
+    let astr = general_purpose::STANDARD.encode(req_body.clone());
 
     let vr = ncryptf::Response::get_version(req_body.clone());
     assert_eq!(vr.unwrap(), 2);
@@ -226,7 +202,7 @@ fn test_echo() {
     // We should get an HTTP 200 back
     assert_eq!(response.status().code, 200);
     let body = response.into_string().unwrap();
-    let bbody = base64::decode(body.clone()).unwrap();
+    let bbody = general_purpose::STANDARD.decode(body.clone()).unwrap();
     let r = ncryptf::Response::from(kp.get_secret_key()).unwrap();
 
     let message = r.decrypt(bbody, None, None);
@@ -251,7 +227,7 @@ fn test_echo_plain() {
         .encrypt(json.to_string(), ek.get_box_kp().get_public_key())
         .unwrap();
     assert_eq!(body.clone().len(), 253);
-    let astr = base64::encode(body.clone());
+    let astr = general_purpose::STANDARD.encode(body.clone());
 
     let response = client
         .post("/echo")
@@ -281,13 +257,13 @@ fn test_echo_plain_to_encrypted() {
         .header(Header::new("Content-Type", "application/json"))
         .header(Header::new("Accept", "application/vnd.ncryptf+json"))
         .header(Header::new("X-HashId", ek.get_hash_id()))
-        .header(Header::new("X-PubKey", base64::encode(kp.get_public_key())))
+        .header(Header::new("X-PubKey", general_purpose::STANDARD.encode(kp.get_public_key())))
         .dispatch();
 
     // We should get an HTTP 200 back
     assert_eq!(response.status().code, 200);
     let body = response.into_string().unwrap();
-    let bbody = base64::decode(body.clone()).unwrap();
+    let bbody = general_purpose::STANDARD.decode(body.clone()).unwrap();
     let r = ncryptf::Response::from(kp.get_secret_key()).unwrap();
 
     let message = r.decrypt(bbody, None, None);
@@ -326,8 +302,8 @@ fn test_auth_echo_plain_to_plain() {
     let token =  ncryptf::Token::from(
         "x2gMeJ5Np0CcKpZav+i9iiXeQBtaYMQ/yeEtcOgY3J".to_string(),
         "LRSEe5zHb1aq20Hr9te2sQF8sLReSkO8bS1eD/9LDM8".to_string(),
-        base64::decode("f2mTaH9vkZZQyF7SxVeXDlOSDbVwjUzhdXv2T/YYO8k=").unwrap().to_vec(),
-        base64::decode("7v/CdiGoEI7bcj7R2EyDPH5nrCd2+7rHYNACB+Kf2FMx405und2KenGjNpCBPv0jOiptfHJHiY3lldAQTGCdqw==").unwrap().to_vec(),
+        general_purpose::STANDARD.decode("f2mTaH9vkZZQyF7SxVeXDlOSDbVwjUzhdXv2T/YYO8k=").unwrap().to_vec(),
+        general_purpose::STANDARD.decode("7v/CdiGoEI7bcj7R2EyDPH5nrCd2+7rHYNACB+Kf2FMx405und2KenGjNpCBPv0jOiptfHJHiY3lldAQTGCdqw==").unwrap().to_vec(),
         now + 14400
     ).unwrap();
 
@@ -373,8 +349,8 @@ fn test_auth_get() {
     let token =  ncryptf::Token::from(
         "x2gMeJ5Np0CcKpZav+i9iiXeQBtaYMQ/yeEtcOgY3J".to_string(),
         "LRSEe5zHb1aq20Hr9te2sQF8sLReSkO8bS1eD/9LDM8".to_string(),
-        base64::decode("f2mTaH9vkZZQyF7SxVeXDlOSDbVwjUzhdXv2T/YYO8k=").unwrap().to_vec(),
-        base64::decode("7v/CdiGoEI7bcj7R2EyDPH5nrCd2+7rHYNACB+Kf2FMx405und2KenGjNpCBPv0jOiptfHJHiY3lldAQTGCdqw==").unwrap().to_vec(),
+        general_purpose::STANDARD.decode("f2mTaH9vkZZQyF7SxVeXDlOSDbVwjUzhdXv2T/YYO8k=").unwrap().to_vec(),
+        general_purpose::STANDARD.decode("7v/CdiGoEI7bcj7R2EyDPH5nrCd2+7rHYNACB+Kf2FMx405und2KenGjNpCBPv0jOiptfHJHiY3lldAQTGCdqw==").unwrap().to_vec(),
         now + 14400
     ).unwrap();
 
@@ -428,8 +404,8 @@ fn test_auth_echo_encrypted_to_plain() {
     let token =  ncryptf::Token::from(
         "x2gMeJ5Np0CcKpZav+i9iiXeQBtaYMQ/yeEtcOgY3J".to_string(),
         "LRSEe5zHb1aq20Hr9te2sQF8sLReSkO8bS1eD/9LDM8".to_string(),
-        base64::decode("f2mTaH9vkZZQyF7SxVeXDlOSDbVwjUzhdXv2T/YYO8k=").unwrap().to_vec(),
-        base64::decode("7v/CdiGoEI7bcj7R2EyDPH5nrCd2+7rHYNACB+Kf2FMx405und2KenGjNpCBPv0jOiptfHJHiY3lldAQTGCdqw==").unwrap().to_vec(),
+        general_purpose::STANDARD.decode("f2mTaH9vkZZQyF7SxVeXDlOSDbVwjUzhdXv2T/YYO8k=").unwrap().to_vec(),
+        general_purpose::STANDARD.decode("7v/CdiGoEI7bcj7R2EyDPH5nrCd2+7rHYNACB+Kf2FMx405und2KenGjNpCBPv0jOiptfHJHiY3lldAQTGCdqw==").unwrap().to_vec(),
         now + 14400
     ).unwrap();
 
@@ -439,7 +415,7 @@ fn test_auth_echo_encrypted_to_plain() {
         .unwrap()
         .encrypt(json.to_string(), ek.get_box_kp().get_public_key())
         .unwrap();
-    let astr = base64::encode(req_body.clone());
+    let astr = general_purpose::STANDARD.encode(req_body.clone());
 
     let vr = ncryptf::Response::get_version(req_body.clone());
     assert_eq!(vr.unwrap(), 2);
@@ -472,7 +448,7 @@ fn test_auth_echo_encrypted_to_plain() {
     // We should get an HTTP 200 back
     assert_eq!(response.status().code, 200);
     let body = response.into_string().unwrap();
-    let bbody = base64::decode(body.clone()).unwrap();
+    let bbody = general_purpose::STANDARD.decode(body.clone()).unwrap();
     let r = ncryptf::Response::from(kp.get_secret_key()).unwrap();
 
     let message = r.decrypt(bbody, None, None);
@@ -488,9 +464,9 @@ fn test_echo_large_body() {
     let ek = get_ek();
 
     let s = ExampleStruct {
-        f: base64::encode(randombytes_buf(64)),
-        g: base64::encode(randombytes_buf(64)),
-        h: base64::encode(randombytes_buf(64)),
+        f: general_purpose::STANDARD.encode(randombytes_buf(64)),
+        g: general_purpose::STANDARD.encode(randombytes_buf(64)),
+        h: general_purpose::STANDARD.encode(randombytes_buf(64)),
     };
     let json = serde_json::to_string(&s).unwrap();
 
@@ -502,7 +478,7 @@ fn test_echo_large_body() {
         .unwrap()
         .encrypt(json.to_string(), ek.get_box_kp().get_public_key())
         .unwrap();
-    let astr = base64::encode(req_body.clone());
+    let astr = general_purpose::STANDARD.encode(req_body.clone());
 
     let vr = ncryptf::Response::get_version(req_body.clone());
     assert_eq!(vr.unwrap(), 2);
@@ -518,7 +494,7 @@ fn test_echo_large_body() {
     // We should get an HTTP 200 back
     assert_eq!(response.status().code, 200);
     let body = response.into_string().unwrap();
-    let bbody = base64::decode(body.clone()).unwrap();
+    let bbody = general_purpose::STANDARD.decode(body.clone()).unwrap();
     let r = ncryptf::Response::from(kp.get_secret_key()).unwrap();
 
     let message = r.decrypt(bbody, None, None);

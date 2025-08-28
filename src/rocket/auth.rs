@@ -9,10 +9,10 @@ pub use rocket::{
     async_trait,
     http::Status,
     data::{FromData, Outcome},
-    request::{self, Request},
+    request::{self},
 };
 #[doc(hidden)]
-pub use rocket_db_pools::figment::Figment;
+pub use rocket::figment::Figment;
 
 pub use serde::Deserialize;
 
@@ -56,7 +56,7 @@ impl<T: AuthorizationTrait + Clone> RequestData<T> {
         return self.identity.clone();
     }
 
-    pub fn get_data<D: crate::serde::DeserializeOwned>(&self) -> Result<crate::rocket::Json<D>, anyhow::Error> {
+    pub fn get_data<D: rocket::serde::DeserializeOwned>(&self) -> Result<crate::rocket::Json<D>, anyhow::Error> {
         match crate::rocket::Json::<D>::from_str(self.data.clone().as_str()) {
             Ok(s) => Ok(s),
             Err(e) => Err(anyhow::anyhow!(e.to_string()))
