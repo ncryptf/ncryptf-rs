@@ -21,12 +21,6 @@ use crate::shared::{ExportableEncryptionKeyData, EncryptionKey};
 use cached::{Cached, IOCached};
 use std::sync::{Arc, Mutex};
 
-#[deprecated(since = "0.5.2", note = "Use ncryptf::shared::EncryptionKey instead")]
-pub use crate::shared::EncryptionKey;
-
-#[deprecated(since = "0.5.2", note = "Use ncryptf::shared::ExportableEncryptionKeyData instead")]
-pub use crate::shared::ExportableEncryptionKeyData;
-
 /// A wrapper for supported cache types
 pub enum CacheWrapper {
     TimedCache(Arc<Mutex<cached::TimedCache<String, EncryptionKey>>>),
