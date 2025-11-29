@@ -3,9 +3,10 @@ use std::{error, fmt, io};
 use base64::{engine::general_purpose, Engine as _};
 use crate::shared::EncryptionKey;
 use super::{
-    CacheWrapper, RequestPublicKey, RequestSigningPublicKey,
-    NCRYPTF_CONTENT_TYPE,
+    CacheWrapper, RequestPublicKey, RequestSigningPublicKey
 };
+
+use crate::shared::NCRYPTF_CONTENT_TYPE;
 use anyhow::anyhow;
 use rocket::{
     data::{FromData, Limits, Outcome},
