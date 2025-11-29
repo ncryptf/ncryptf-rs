@@ -131,7 +131,7 @@ impl<'r, T: AuthorizationTrait> FromData<'r> for RequestData<T> {
                     params.version
                 ) {
                     Ok(auth) => {
-                        if auth.verify(params.hmac, crate::rocket::NCRYPTF_DRIFT_ALLOWANCE) {
+                        if auth.verify(params.hmac, crate::shared::NCRYPTF_DRIFT_ALLOWANCE) {
                             match <T>::get_user_from_token(token, dbs).await {
                                 Ok(user) => return Outcome::Success(RequestData { identity: *user, data: data.clone() }),
                                 Err(_) => return Outcome::Error((Status::Unauthorized, TokenError::InvalidToken))
@@ -234,7 +234,7 @@ macro_rules! auth {
                             params.version
                         ) {
                             Ok(auth) => {
-                                if auth.verify(params.hmac, $crate::rocket::NCRYPTF_DRIFT_ALLOWANCE) {
+                                if auth.verify(params.hmac, $crate::shared::NCRYPTF_DRIFT_ALLOWANCE) {
                                     match <$T>::get_user_from_token(token, dbs).await {
                                         Ok(user) => return rocket::request::Outcome::Success(*user),
                                         Err(_) => return rocket::request::Outcome::Error(($crate::rocket::Status::Unauthorized, TokenError::InvalidToken))

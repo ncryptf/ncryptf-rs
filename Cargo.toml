@@ -5,7 +5,7 @@ description = "Secure API authentication and end to end encryption."
 repository = "https://github.com/ncryptf/ncryptf-rs"
 license = "BSD-3-Clause"
 categories = ["cryptography", "authentication", "api-bindings"]
-version = "0.5.3"
+version = "0.5.4"
 edition = "2024"
 
 [dependencies]

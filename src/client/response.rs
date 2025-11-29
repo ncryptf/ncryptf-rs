@@ -46,7 +46,7 @@ impl Response {
                 match r.headers.get("Content-Type") {
                     Some(h) => match h.to_str() {
                         // If this is an NCRYPTF response, we need to decrypt it
-                        Ok(crate::rocket::NCRYPTF_CONTENT_TYPE) => {
+                        Ok(crate::shared::NCRYPTF_CONTENT_TYPE) => {
                             // If the body is empty, don't attempt to decrypt the response
                             if body.is_empty() {
                                 r.body = None;

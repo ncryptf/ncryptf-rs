@@ -3,6 +3,12 @@ use base64::{engine::general_purpose, Engine as _};
 use rand::{distr::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 
+/// The Ncryptf JSON content type
+pub const NCRYPTF_CONTENT_TYPE: &str = "application/vnd.ncryptf+json";
+
+/// The amount of time (in either direction) a request time may differ by and still be accepted.
+pub const NCRYPTF_DRIFT_ALLOWANCE: i32 = 90;
+
 /// Reusable encryption key data for client parsing
 ///
 /// This is exported for use in your application for deserializing the request.

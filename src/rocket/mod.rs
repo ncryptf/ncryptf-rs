@@ -1,11 +1,5 @@
 use rocket::Request;
 
-/// The Ncryptf JSON content type
-pub const NCRYPTF_CONTENT_TYPE: &str = "application/vnd.ncryptf+json";
-
-/// The amount of time (in either direction) a request time may differ by and still be accepted.
-pub const NCRYPTF_DRIFT_ALLOWANCE: i32 = 90;
-
 /// The cached public key from the request
 pub struct RequestPublicKey(pub Vec<u8>);
 
