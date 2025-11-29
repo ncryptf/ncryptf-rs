@@ -1,6 +1,7 @@
 /// Ncryptf version 2 magic header
 const VERSION_2_HEADER: &str = "DE259002";
 const NCRYPTF_CURRENT_VERSION: i8 = 2;
+
 mod token;
 pub use token::Token;
 mod keypair;
@@ -17,6 +18,7 @@ mod signature;
 pub use signature::Signature;
 mod util;
 pub use util::randombytes_buf;
+pub mod shared;
 
 #[cfg(feature = "rocket")]
 pub mod rocket;

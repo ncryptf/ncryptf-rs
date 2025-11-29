@@ -5,8 +5,8 @@ description = "Secure API authentication and end to end encryption."
 repository = "https://github.com/ncryptf/ncryptf-rs"
 license = "BSD-3-Clause"
 categories = ["cryptography", "authentication", "api-bindings"]
-version = "0.5.1"
-edition = "2021"
+version = "0.5.2"
+edition = "2024"
 
 [dependencies]
 dryoc = { version = "0.7", default-features = false, features = ["base64", "serde"] }
@@ -14,7 +14,7 @@ thiserror = { version = "^2" }
 chrono = { version = "^0.4" }
 base64 = { version = "^0.22" }
 sha256 = { version = "1.0.3" }
-hkdf = { version = "0.12.3" }
+hkdf = { version = "^0.12" }
 sha2 = { version = "^0.10"  }
 hmac = { version = "^0.12" }
 serde = { version = "1", features = ["derive"] }

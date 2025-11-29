@@ -7,6 +7,7 @@ use reqwest::{
     RequestBuilder,
 };
 use thiserror::Error;
+use crate::shared::{ExportableEncryptionKeyData};
 
 #[derive(Error, Debug)]
 pub enum RequestError {
@@ -63,7 +64,7 @@ where
     pub token: Option<crate::Token>,
     pub ut: Option<UT>,
     pub rt: Option<RT>,
-    ek: Option<crate::rocket::ExportableEncryptionKeyData>,
+    ek: Option<ExportableEncryptionKeyData>,
 }
 
 #[derive(Debug, Clone)]
@@ -180,7 +181,7 @@ impl<UT: UpdateTokenTrait, RT: RequestTrait> Request<UT, RT> {
         match self.do_request(builder, kp).await {
             Ok(response) => match response.status {
                 reqwest::StatusCode::OK => match serde_json::from_str::<
-                    crate::rocket::ExportableEncryptionKeyData,
+                    ExportableEncryptionKeyData,
                 >(&response.body.unwrap())
                 {
                     Ok(ek) => {
@@ -450,7 +451,7 @@ impl<UT: UpdateTokenTrait, RT: RequestTrait> Request<UT, RT> {
                 {
                     let xp = expires_at.unwrap().parse::<i64>();
                     if xp.is_ok() {
-                        self.ek = Some(crate::rocket::ExportableEncryptionKeyData {
+                        self.ek = Some(ExportableEncryptionKeyData {
                             public: public_key.unwrap(),
                             signature: signature_key.unwrap(),
                             hash_id: hash_id.unwrap(),

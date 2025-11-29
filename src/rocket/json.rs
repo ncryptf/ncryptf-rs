@@ -1,8 +1,9 @@
 use std::{error, fmt, io};
 
 use base64::{engine::general_purpose, Engine as _};
+use crate::shared::EncryptionKey;
 use super::{
-    CacheWrapper, EncryptionKey, RequestPublicKey, RequestSigningPublicKey,
+    CacheWrapper, RequestPublicKey, RequestSigningPublicKey,
     NCRYPTF_CONTENT_TYPE,
 };
 use anyhow::anyhow;

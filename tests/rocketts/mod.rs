@@ -1,4 +1,4 @@
-use ncryptf::{ek_route, randombytes_buf, rocket::ExportableEncryptionKeyData};
+use ncryptf::{ek_route, randombytes_buf, shared::ExportableEncryptionKeyData};
 use rocket::{http::Header, local::blocking::Client, serde::Serialize};
 use serde::Deserialize;
 use base64::{Engine as _, engine::general_purpose};
@@ -75,7 +75,7 @@ ncryptf::auth!(User);
 fn auth_only(
     _user: User
 ) -> ncryptf::rocket::Json<TestStruct> {
-    let t = TestStruct { 
+    let t = TestStruct {
         hello: "world".to_string()
     };
     return ncryptf::rocket::Json::<TestStruct>(t);
@@ -97,7 +97,7 @@ fn setup() -> Client {
         .manage(cache_wrapper)
         .mount("/", routes![echo, auth_echo, echo2, auth_only])
         .mount("/ncryptf", routes![ncryptf_ek_route]);
-    
+
     return match Client::untracked(rocket) {
         Ok(client) => client,
         Err(_error) => {
@@ -110,9 +110,9 @@ fn setup() -> Client {
 use std::sync::{Arc, Mutex};
 
 // Global cache for testing - this allows get_ek() to share the same cache as the Rocket instance
-static GLOBAL_CACHE: std::sync::OnceLock<Arc<Mutex<cached::TimedCache<String, ncryptf::rocket::EncryptionKey>>>> = std::sync::OnceLock::new();
+static GLOBAL_CACHE: std::sync::OnceLock<Arc<Mutex<cached::TimedCache<String, ncryptf::shared::EncryptionKey>>>> = std::sync::OnceLock::new();
 
-fn get_or_create_cache() -> Arc<Mutex<cached::TimedCache<String, ncryptf::rocket::EncryptionKey>>> {
+fn get_or_create_cache() -> Arc<Mutex<cached::TimedCache<String, ncryptf::shared::EncryptionKey>>> {
     GLOBAL_CACHE.get_or_init(|| {
         let cache = cached::TimedCache::with_lifespan_and_refresh(
             std::time::Duration::from_secs(3600),
@@ -122,9 +122,9 @@ fn get_or_create_cache() -> Arc<Mutex<cached::TimedCache<String, ncryptf::rocket
     }).clone()
 }
 
-fn get_ek() -> ncryptf::rocket::EncryptionKey {
-    let ek = ncryptf::rocket::EncryptionKey::new(false);
-    
+fn get_ek() -> ncryptf::shared::EncryptionKey {
+    let ek = ncryptf::shared::EncryptionKey::new(false);
+
     // Store in the shared cache
     let cache = get_or_create_cache();
     if let Ok(mut cache_guard) = cache.lock() {

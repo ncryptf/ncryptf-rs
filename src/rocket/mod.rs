@@ -15,12 +15,17 @@ pub struct RequestSigningPublicKey(pub Vec<u8>);
 mod json;
 pub use json::{respond_to_with_ncryptf, Error as JsonError, Json, JsonResponse, parse_body};
 mod ek;
-pub use ek::{EncryptionKey, ExportableEncryptionKeyData};
 mod auth;
 pub use auth::{AuthorizationTrait, TokenError, RequestData, *};
-
+use crate::shared::{ExportableEncryptionKeyData, EncryptionKey};
 use cached::{Cached, IOCached};
 use std::sync::{Arc, Mutex};
+
+#[deprecated(since = "0.5.2", note = "Use ncryptf::shared::EncryptionKey instead")]
+pub use crate::shared::EncryptionKey;
+
+#[deprecated(since = "0.5.2", note = "Use ncryptf::shared::ExportableEncryptionKeyData instead")]
+pub use crate::shared::ExportableEncryptionKeyData;
 
 /// A wrapper for supported cache types
 pub enum CacheWrapper {
@@ -49,7 +54,7 @@ impl CacheWrapper {
             }
         }
     }
-    
+
     pub fn set(&self, key: String, value: EncryptionKey) {
         match self {
             CacheWrapper::TimedCache(cache) => {
@@ -69,7 +74,7 @@ impl CacheWrapper {
             }
         }
     }
-    
+
     pub fn remove(&self, key: &str) -> Option<EncryptionKey> {
         match self {
             CacheWrapper::TimedCache(cache) => {
@@ -99,7 +104,7 @@ pub fn get_cache(req: &Request<'_>) -> Result<CacheWrapper, anyhow::Error> {
     if let Some(cache) = req.rocket().state::<Arc<Mutex<cached::TimedCache<String, EncryptionKey>>>>() {
         return Ok(CacheWrapper::TimedCache(cache.clone()));
     }
-    
+
     // Try cached::UnboundCache
     if let Some(cache) = req.rocket().state::<Arc<Mutex<cached::UnboundCache<String, EncryptionKey>>>>() {
         return Ok(CacheWrapper::UnboundCache(cache.clone()));
