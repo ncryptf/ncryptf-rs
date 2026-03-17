@@ -1,6 +1,6 @@
 use crate::{Keypair, Signature};
 use base64::{engine::general_purpose, Engine as _};
-use rand::{distr::Alphanumeric, Rng};
+use rand::{distr::Alphanumeric, RngExt};
 use serde::{Deserialize, Serialize};
 
 /// The Ncryptf JSON content type
